@@ -9,7 +9,7 @@
 #import "DeviceManagementHelper.h"
 //#import <CollectionFactory/CollectionFactory.h>
 
-static bool isDeviceConnected = NO;
+static bool deviceConnected = NO;
 static bool isConnectingState = NO;
 static bool keepSearchingDevices = NO;
 static RUADeviceType _connectingDeviceType;
@@ -24,11 +24,14 @@ static NSString *apiKey = nil;
   NSString *callbackId;
   NSString *searchCallbackId;
   NSString *deviceDisconnectedCallbackId;
+  NSString *manualDeviceDisconnectionCallbackId;
   NSMutableArray *deviceList;
 }
 
 - (void)login:(CDVInvokedUrlCommand*)command;
 - (void)connect:(CDVInvokedUrlCommand*)command;
+- (void)disconnect:(CDVInvokedUrlCommand*)command;
+- (void)isDeviceConnected:(CDVInvokedUrlCommand*)command;
 - (void)onDeviceDisconnected:(CDVInvokedUrlCommand*)command;
 - (void)setDeviceType:(CDVInvokedUrlCommand*)command;
 - (void)searchForDevice:(CDVInvokedUrlCommand*)command;
@@ -51,15 +54,14 @@ static NSString *apiKey = nil;
 
 - (void)login:(CDVInvokedUrlCommand*)command
  {
-    clientVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"IngenicomPosSDKClientVersion"];
-    baseURL = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"IngenicomPosSDKBaseUrl"];
-    apiKey = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"IngenicomPosSDKAPIKey"];
+    NSString *uname = [command.arguments objectAtIndex:0];
+    NSString *pw = [command.arguments objectAtIndex:1];         
+    apiKey = [command.arguments objectAtIndex:2];
+    baseURL = [command.arguments objectAtIndex:3];
+    clientVersion = [command.arguments objectAtIndex:4];
 
     [[Ingenico sharedInstance]
-    initializeWithBaseURL:baseURL apiKey:apiKey clientVersion:clientVersion];
-
-    NSString *uname = [command.arguments objectAtIndex:0];
-    NSString *pw = [command.arguments objectAtIndex:1];
+    initializeWithBaseURL:baseURL apiKey:apiKey clientVersion:clientVersion];    
 
     [[[Ingenico sharedInstance] User] loginwithUsername:uname andPassword:pw onResponse:^(IMSUserProfile *user, NSError *error) {
         
@@ -93,11 +95,37 @@ static NSString *apiKey = nil;
     }    
 }
 
+- (void)disconnect:(CDVInvokedUrlCommand*)command
+{
+    NSLog(@"Disconnect");
+    manualDeviceDisconnectionCallbackId = command.callbackId;
+    [[Ingenico sharedInstance].PaymentDevice releaseDevice:self];
+}
+
+#pragma RUAReleaseHandler implementation
+- (void)done {
+    /* Invoked when a device manager releases all the resources it acquired. */
+    CDVPluginResult* pluginResult = nil;
+    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"true"];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:manualDeviceDisconnectionCallbackId];
+}
+
 - (void)onDeviceDisconnected:(CDVInvokedUrlCommand*)command
 {
     NSLog(@"OnDeviceDisconnected");
     deviceDisconnectedCallbackId = command.callbackId;
+}
 
+- (void)isDeviceConnected:(CDVInvokedUrlCommand*)command
+{
+    NSLog(@"isDeviceConnected");
+    CDVPluginResult* pluginResult = nil;
+    if ( deviceConnected == YES) {
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"true"];
+    } else {
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"false"];
+    }
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 - (void)setDeviceType:(CDVInvokedUrlCommand*)command
@@ -183,12 +211,12 @@ static NSString *apiKey = nil;
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"true"];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
     }
-    isDeviceConnected = YES;  
+    deviceConnected = YES;  
 }
 
 - (void)onDisconnected {
     NSLog(@"Disconnected");
-    isDeviceConnected = NO;
+    deviceConnected = NO;
     if (deviceDisconnectedCallbackId != nil){
         CDVPluginResult* pluginResult = nil; 
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"true"];
@@ -199,7 +227,7 @@ static NSString *apiKey = nil;
 - (void)onError:(NSString *)message {
     NSLog(@"Error");
     NSLog(message);
-    isDeviceConnected = NO;
+    deviceConnected = NO;
     [self doSearchForDevice:searchCallbackId];
 }
 
