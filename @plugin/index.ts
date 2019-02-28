@@ -1,23 +1,24 @@
 import { Injectable } from '@angular/core';
-
 import { Plugin, Cordova } from '@ionic-native/core';
-import { UserProfile } from './models/com.ingenico.mpos.sdk.data/user-profile';
-import { CashSaleTransactionRequest } from './models/com.ingenico.mpos.sdk.request/cash-sale-transaction-request';
-import { CreditSaleTransactionRequest } from './models/com.ingenico.mpos.sdk.request/credit-sale-transaction-request';
-import { DebitSaleTransactionRequest } from './models/com.ingenico.mpos.sdk.request/debit-sale-transaction-request';
-import { TransactionResponse } from './models/com.ingenico.mpos.sdk.response/transaction-response';
-import { Device } from './models/com.roam.roamreaderunifiedapi.data/device';
+import {
+  CashSaleTransactionRequest,
+  CreditSaleTransactionRequest,
+  DebitSaleTransactionRequest,
+  Device,
+  TransactionResponse,
+  UserProfile
+} from './models';
 
 @Plugin({
-  pluginName: "ingenicoionic",
-  plugin: "cordova-plugin-ionic-ingenico",
-  pluginRef: "IngenicoIonic",
+  pluginName: "Ingenico",
+  plugin: "cordova-plugin-ingenico",
+  pluginRef: "Ingenico",
   platforms: ['iOS']
 })
 
 
 @Injectable()
-export class IngenicoProvider {
+export class Ingenico {
 
   @Cordova()
   login(username: string, password: string, apiKey: string, baseUrl: string, clientVersion: string): Promise<UserProfile>{

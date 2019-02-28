@@ -1,78 +1,70 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<plugin id="cordova-plugin-ionic-ingenico" version="1.0.0"
-    xmlns="http://apache.org/cordova/ns/plugins/1.0"
-    xmlns:android="http://schemas.android.com/apk/res/android">
+<plugin id="cordova-plugin-ingenico" version="1.0.0" xmlns="http://apache.org/cordova/ns/plugins/1.0">
 
-   <name>IngenicoIonic</name>
+    <name>Ingenico</name>
+    <description>The Ingenico plugin is used to integrate with Ingenico's native iOS mPOS EMV SDK version 1.9.0.8</description>
 
-  <js-module name="IngenicoIonic" src="www/IngenicoIonic.js">
-    <clobbers target="IngenicoIonic"/>
-  </js-module>
+    <engines>
+        <engine name="cordova" version=">=8.0.0"/>
+    </engines>
 
-   <platform name="ios">
-      <config-file parent="/*" target="config.xml">
-         <feature name="IngenicoIonic">
-            <param name="ios-package" value="IngenicoIonic" />
-         </feature>
-      </config-file>
+    <js-module name="Ingenico" src="www/ingenico.js">
+        <clobbers target="Ingenico"/>
+    </js-module>
 
-      <source-file src="src/ios/utils/CollectionFactory/CollectionFactory.h" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/CollectionFactory.m" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSArray+CollectionFactory.h" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSArray+CollectionFactory.m" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSDictionary+CollectionFactory.h" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSDictionary+CollectionFactory.m" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSMutableArray+CollectionFactory.h" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSMutableArray+CollectionFactory.m" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSMutableDictionary+CollectionFactory.h" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSMutableDictionary+CollectionFactory.m" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSMutableString+CollectionFactory.h" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSMutableString+CollectionFactory.m" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSMutableString+CollectionFactoryPrivate.h" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSMutableString+CollectionFactoryPrivate.m" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSNull+CollectionFactory.h" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSNull+CollectionFactory.m" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSNumber+CollectionFactory.h" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSNumber+CollectionFactory.m" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSObject+CollectionFactory.h" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSObject+CollectionFactory.m" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSString+CollectionFactory.h" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSString+CollectionFactory.m" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSURL+CollectionFactory.h" target-dir="src/ios/" />
-      <source-file src="src/ios/utils/CollectionFactory/NSURL+CollectionFactory.m" target-dir="src/ios/" />
+    <platform name="ios">
+        <config-file parent="/*" target="config.xml">
+            <feature name="Ingenico">
+                <param name="ios-package" value="CDVIngenico" />
+            </feature>
+        </config-file>
 
-      <source-file src="src/ios/DeviceManagementHelper.h" />
-      <source-file src="src/ios/DeviceManagementHelper.m" />
+        <source-file src="src/ios/utils/CollectionFactory/CollectionFactory.h" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/CollectionFactory.m" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSArray+CollectionFactory.h" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSArray+CollectionFactory.m" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSDictionary+CollectionFactory.h" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSDictionary+CollectionFactory.m" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSMutableArray+CollectionFactory.h" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSMutableArray+CollectionFactory.m" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSMutableDictionary+CollectionFactory.h" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSMutableDictionary+CollectionFactory.m" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSMutableString+CollectionFactory.h" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSMutableString+CollectionFactory.m" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSMutableString+CollectionFactoryPrivate.h" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSMutableString+CollectionFactoryPrivate.m" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSNull+CollectionFactory.h" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSNull+CollectionFactory.m" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSNumber+CollectionFactory.h" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSNumber+CollectionFactory.m" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSObject+CollectionFactory.h" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSObject+CollectionFactory.m" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSString+CollectionFactory.h" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSString+CollectionFactory.m" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSURL+CollectionFactory.h" target-dir="src/ios/" />
+        <source-file src="src/ios/utils/CollectionFactory/NSURL+CollectionFactory.m" target-dir="src/ios/" />
+        <source-file src="src/ios/DeviceManagementHelper.h" />
+        <source-file src="src/ios/DeviceManagementHelper.m" />
+        <source-file src="src/ios/AutoConnectionHelper.h" />
+        <source-file src="src/ios/AutoConnectionHelper.m" />
+        <source-file src="src/ios/CDVIngenico.m" />
+        <framework src="src/ios/frameworks/IngenicoMposSdk.framework" custom="true" weak="true"/>
+        <framework src="CoreAudio.framework"/>
+        <framework src="CoreBluetooth.framework"/>
+        <framework src="src/ios/frameworks/RUA_MFI.framework" custom="true" weak="true"/>
+        <framework src="libc++.tbd"/>
+        <framework src="AudioToolbox.framework"/>
+        <framework src="MediaPlayer.framework"/>
+        <framework src="src/ios/frameworks/LandiSDK_MFI.framework" custom="true" weak="true"/>
+        <framework src="Security.framework"/>
+        <framework src="CFNetwork.framework"/>
+        <framework src="src/ios/frameworks/G4XSwiper.framework" custom="true" weak="true"/>
+        <framework src="AVFoundation.framework"/>
+        <framework src="Webkit.framework"/>
+        <framework src="ExternalAccessory.framework"/>
+        <framework src="libz.tbd"/>
+    </platform>
 
-      <source-file src="src/ios/AutoConnectionHelper.h" />
-      <source-file src="src/ios/AutoConnectionHelper.m" />
-
-      <source-file src="src/ios/IngenicoIonic.m" />
-
-      <framework src="src/ios/frameworks/IngenicoMposSdk.framework" custom="true" weak="true"/>
-
-      <framework src="CoreAudio.framework"/>
-      <framework src="CoreBluetooth.framework"/>
-      <!-- <framework src="Libstdc++.6"/> -->
-
-      <framework src="src/ios/frameworks/RUA_MFI.framework" custom="true" weak="true"/>
-
-      <framework src="libc++.tbd"/>
-      <framework src="AudioToolbox.framework"/>
-      <framework src="MediaPlayer.framework"/>
-
-      <framework src="src/ios/frameworks/LandiSDK_MFI.framework" custom="true" weak="true"/>
-
-      <framework src="Security.framework"/>
-      <framework src="CFNetwork.framework"/>
-
-      <framework src="src/ios/frameworks/G4XSwiper.framework" custom="true" weak="true"/>
-
-      <framework src="AVFoundation.framework"/>
-      <framework src="Webkit.framework"/>
-      <framework src="ExternalAccessory.framework"/>
-      <framework src="libz.tbd"/>
-
-      <!-- <framework src="src/ios/frameworks/CollectionFactory.framework" custom="true" weak="true" /> -->
-   </platform>
+    <hook type="after_plugin_add" src="hooks/add-ionic-native-plugin.js" />
+    <hook type="after_plugin_rm" src="hooks/delete-ionic-native-plugin.js" />
 </plugin>
