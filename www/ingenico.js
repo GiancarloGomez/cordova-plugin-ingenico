@@ -97,8 +97,8 @@ var Ingenico = {
 
     prepareTransaction : function (transaction){
         let amount             = JSON.stringify(transaction.amount),
-            transactionGroupID = (transaction.transactionGroupID) ? transaction.transactionGroupID : "",
-            transactionNotes   = (transaction.transactionNotes) ? transaction.transactionNotes : "";
+            transactionGroupID = transaction.transactionGroupID ? transaction.transactionGroupID : null,
+            transactionNotes   = transaction.transactionNotes ? transaction.transactionNotes : null;
         return [amount, transactionGroupID, transactionNotes];
     }
 };
