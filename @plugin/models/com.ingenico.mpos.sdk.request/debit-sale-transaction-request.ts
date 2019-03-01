@@ -18,11 +18,12 @@ export class DebitSaleTransactionRequest {
     transactionNotes?: any;
     type: string;
 
-    constructor(_amount: Amount, _products: Product[], _gpsLongitude: string, _gpsLatitude: string, _transactionGroupID?: any){
-        this.amount = _amount;
-        this.products = _products;
-        this.gpsLongitude = _gpsLongitude;
-        this.gpsLatitude = _gpsLatitude;
+    /*
+    * Simplified due to only working with amount transactionGroupID, and transactionNotes
+    */
+    constructor(_amount: Amount, _transactionGroupID?: any, _transactionNotes?: any){
+        this.amount             = _amount;
         this.transactionGroupID = _transactionGroupID;
+        this.transactionNotes   = _transactionNotes;
     }
 }

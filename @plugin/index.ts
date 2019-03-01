@@ -1,5 +1,5 @@
-import { Injectable } from '@angular/core';
-import { Plugin, Cordova } from '@ionic-native/core';
+import { Injectable } from "@angular/core";
+import { Plugin, Cordova } from "@ionic-native/core";
 import {
   CashSaleTransactionRequest,
   CreditSaleTransactionRequest,
@@ -7,13 +7,13 @@ import {
   Device,
   TransactionResponse,
   UserProfile
-} from './models';
+} from "./models";
 
 @Plugin({
-  pluginName: "Ingenico",
-  plugin: "cordova-plugin-ingenico",
-  pluginRef: "Ingenico",
-  platforms: ['iOS']
+  pluginName : "Ingenico",
+  plugin     : "cordova-plugin-ingenico",
+  pluginRef  : "Ingenico",
+  platforms  : ["iOS"]
 })
 
 
@@ -86,12 +86,12 @@ export class Ingenico {
   }
 
   @Cordova()
-  uploadSignature(arg0: string, arg1: string): Promise<boolean> {
+  getReferenceForTransactionWithPendingSignature(): Promise<string> {
     return;
   }
 
   @Cordova()
-  getReferenceForTransactionWithPendingSignature(): Promise<string> {
+  uploadSignature(transactionReference: string, signatureImage: string): Promise<boolean> {
     return;
   }
 }

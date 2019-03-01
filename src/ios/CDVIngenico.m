@@ -363,20 +363,20 @@ static NSString *apiKey = nil;
 {
     CDVPluginResult* pluginResult = nil;
     @try {
-        NSString *amountJSON = [command.arguments objectAtIndex:0];
-        NSString *productsJSON = [command.arguments objectAtIndex:1];
-        //NSString *longitude = [command.arguments objectAtIndex:2];
-        //NSString *latitude = [command.arguments objectAtIndex:3];
-        //NSString *transactionGroupID = [command.arguments objectAtIndex:4];
-
-        IMSAmount *amount = [IMSAmount objectWithJSONString:amountJSON];
+        NSString *amountJSON         = [command.arguments objectAtIndex:0];
+        NSString *transactionGroupID = [command.arguments objectAtIndex:1];
+        NSString *transactionNotes   = [command.arguments objectAtIndex:2];
+        IMSAmount *amount            = [IMSAmount objectWithJSONString:amountJSON];
 
         IMSCashSaleTransactionRequest *request = [[IMSCashSaleTransactionRequest alloc] initWithAmount:amount
                                                     andProducts:nil
-                                                    // andCustomerInfo:nil
-                                                    andLongitude:nil //longitude
-                                                    andLatitude:nil //latitude
-                                                    andTransactionGroupID:nil //transactionGroupID
+                                                    andClerkID:nil
+                                                    andLongitude:nil
+                                                    andLatitude:nil
+                                                    andTransactionGroupID:transactionGroupID
+                                                    andTransactionNotes:transactionNotes
+                                                    andMerchantInvoiceID:nil
+                                                    andShowNotesAndInvoiceOnReceipt:false
                                                 ];
 
         [[Ingenico sharedInstance].Payment processCashTransaction:request andOnDone:^(IMSTransactionResponse *response, NSError *error)
@@ -403,27 +403,21 @@ static NSString *apiKey = nil;
 {
     CDVPluginResult* pluginResult = nil;
     @try {
-        NSString *amountJSON = [command.arguments objectAtIndex:0];
-        NSString *productsJSON = [command.arguments objectAtIndex:1];
-        NSString *longitude = [command.arguments objectAtIndex:2];
-        NSString *latitude = [command.arguments objectAtIndex:3];
-        NSString *transactionGroupID = [command.arguments objectAtIndex:4];
-
-        IMSAmount *amount = [IMSAmount objectWithJSONString:amountJSON];
+        NSString *amountJSON         = [command.arguments objectAtIndex:0];
+        NSString *transactionGroupID = [command.arguments objectAtIndex:1];
+        NSString *transactionNotes   = [command.arguments objectAtIndex:2];
+        IMSAmount *amount            = [IMSAmount objectWithJSONString:amountJSON];
 
         IMSCreditSaleTransactionRequest *request = [[IMSCreditSaleTransactionRequest alloc] initWithAmount:amount
-            andProducts:nil
-            andClerkID:nil
-            andLongitude:nil
-            andLatitude:nil
-            andTransactionGroupID:nil
-            andTransactionNotes:nil
-            andMerchantInvoiceID:nil
-            andShowNotesAndInvoiceOnReceipt:true
-            andTokenRequestParameters:nil
-            andCustomReference:nil
-            andIsCompleted:false
-            andUCIFormat:UCIFormatIngenico];
+                                                    andProducts:nil
+                                                    andClerkID:nil
+                                                    andLongitude:nil
+                                                    andLatitude:nil
+                                                    andTransactionGroupID:transactionGroupID
+                                                    andTransactionNotes:transactionNotes
+                                                    andMerchantInvoiceID:nil
+                                                    andShowNotesAndInvoiceOnReceipt:false
+                                                ];
 
         [[Ingenico sharedInstance].Payment processCreditSaleTransactionWithCardReader:request
             andUpdateProgress:^(IMSProgressMessage message, NSString *extraMessage) { }
@@ -453,19 +447,21 @@ static NSString *apiKey = nil;
 {
     CDVPluginResult* pluginResult = nil;
     @try {
-        NSString *amountJSON = [command.arguments objectAtIndex:0];
-        NSString *productsJSON = [command.arguments objectAtIndex:1];
-        NSString *longitude = [command.arguments objectAtIndex:2];
-        NSString *latitude = [command.arguments objectAtIndex:3];
-        NSString *transactionGroupID = [command.arguments objectAtIndex:4];
-
-        IMSAmount *amount = [IMSAmount objectWithJSONString:amountJSON];
+        NSString *amountJSON         = [command.arguments objectAtIndex:0];
+        NSString *transactionGroupID = [command.arguments objectAtIndex:1];
+        NSString *transactionNotes   = [command.arguments objectAtIndex:2];
+        IMSAmount *amount            = [IMSAmount objectWithJSONString:amountJSON];
 
         IMSDebitSaleTransactionRequest *request = [[IMSDebitSaleTransactionRequest alloc] initWithAmount:amount
-            andProducts:nil
-            andLongitude:nil
-            andLatitude:nil
-            andTransactionGroupID:nil];
+                                                    andProducts:nil
+                                                    andClerkID:nil
+                                                    andLongitude:nil
+                                                    andLatitude:nil
+                                                    andTransactionGroupID:transactionGroupID
+                                                    andTransactionNotes:transactionNotes
+                                                    andMerchantInvoiceID:nil
+                                                    andShowNotesAndInvoiceOnReceipt:false
+                                                ];
 
         [[Ingenico sharedInstance].Payment processDebitSaleTransactionWithCardReader:request
             andUpdateProgress:^(IMSProgressMessage message, NSString *extraMessage) { }
@@ -503,7 +499,6 @@ static NSString *apiKey = nil;
     NSString *transactionReference = [command.arguments objectAtIndex:0];
     NSString *signatureImage = [command.arguments objectAtIndex:1];
 
-
     NSLog(@"Transaction Reference");
     NSLog(transactionReference);
     NSLog(@"Signature Image");
@@ -514,8 +509,7 @@ static NSString *apiKey = nil;
                                         andOnDone:^(NSError *error) {
         CDVPluginResult* pluginResult = nil;
         if(error){
-            /*Send email receipt failed(code in the response will indicates
-            the result)*/
+            /*Send email receipt failed(code in the response will indicates the result)*/
             pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:error.localizedDescription];
         } else {
             /*Send email receipt succeeded*/

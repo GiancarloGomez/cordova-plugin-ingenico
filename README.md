@@ -15,11 +15,11 @@ referenced in the import statements.
 
 ### Install in Ionic Project
 It is recommended that you have a ``plugins_src`` folder in the Ionic Project you are installing to and 
-copy the contents of this repo into the following directory ``plugins_src/ingenico-cordova-plugin``. Once all
+copy the contents of this repo into the following directory ``plugins_src/cordova-plugin-ingenico``. Once all
 files are copied run the following command to install in your project.
 
 ```bash
-ionic cordova plugin add ./plugins_src/ingenico-cordova-plugin
+ionic cordova plugin add plugins_src/cordova-plugin-ingenico
 ```
 
 ### Add Native Plugin to src/app/app.module.ts
@@ -65,7 +65,7 @@ All methods return a ``Promise``
 _Initialize Ingenico with API credentials (username, password and apiKey ), API Base URL and Client Version._
 
 ```javascript
-this.ingenico.login(username,password,apiKey,baseUrl,clientVersion)
+this.ingenico.login(username, password, apiKey, baseUrl, clientVersion)
     .then(result => {})
     .catch(error => {});
 ```
@@ -133,7 +133,7 @@ this.ingenico.setDeviceType(DeviceType)
     .catch(error => {});
 ```
 
-#### searchForDevice(DeviceType)
+#### searchForDevice()
 _Search for Devices for manual setup. Returns an Array of Devices found_
 
 ```javascript
@@ -142,7 +142,7 @@ this.ingenico.searchForDevice()
     .catch(error => {});
 ```
 
-#### stopSearchForDevice(DeviceType)
+#### stopSearchForDevice()
 _Stops searching for Devices intiated by searchForDevice()_
 
 ```javascript
@@ -151,18 +151,18 @@ this.ingenico.stopSearchForDevice()
     .catch(error => {});
 ```
 
-#### selectDevice(DeviceType)
+#### selectDevice(Device)
 _Set the selected Device from available Devices ( in manual mode ). Required before setupDevice()_
 
 ```javascript
-this.ingenico.selectDevice()
+this.ingenico.selectDevice(Device)
     .then(result => {
         // fire off setupDevice() here
     })
     .catch(error => {});
 ```
 
-#### setupDevice(DeviceType)
+#### setupDevice()
 _Configures the selected Device for use ( in manual mode )._
 
 ```javascript
@@ -200,20 +200,22 @@ this.ingenico.processDebitSaleTransactionWithCardReader(DebitSaleTransactionRequ
     .catch(error => {});
 ```
 
-### uploadSignature(TransactionResult,base64String)
-_Send a Base64 Image string for a Transaction Pending Signature which is returned from the getReferenceForTransactionWithPendingSignature() Method._
-
-```javascript
-this.ingenico.uploadSignature(TransactionResult,base64String)
-    .then(result => {})
-    .catch(error => {});
-```
-
 ### getReferenceForTransactionWithPendingSignature()
 _Checks if there is a Transaction pengin a signature upload_
 
 ```javascript
 this.ingenico.getReferenceForTransactionWithPendingSignature()
+    .then(result => {
+        // execute uploadSignature()
+    })
+    .catch(error => {});
+```
+
+### uploadSignature(transactionReference,signatureImage)
+_Send a Base64 Image string (signatureImage) for a Transaction Pending Signature (transactionReference) which is returned from the getReferenceForTransactionWithPendingSignature() Method._
+
+```javascript
+this.ingenico.uploadSignature(transactionReference,signatureImage)
     .then(result => {})
     .catch(error => {});
 ```

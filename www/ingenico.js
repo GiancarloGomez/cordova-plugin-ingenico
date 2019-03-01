@@ -97,11 +97,9 @@ var Ingenico = {
 
     prepareTransaction : function (transaction){
         let amount             = JSON.stringify(transaction.amount),
-            products           = JSON.stringify(transaction.products),
-            longitude          = (transaction.gpsLongitude == null) ? transaction.gpsLongitude : "",
-            latitude           = (transaction.gpsLatitude == null) ? transaction.gpsLatitude : "",
-            transactionGroupID = (transaction.transactionGroupID == null) ? transaction.transactionGroupID : "";
-        return [amount, products, longitude, latitude, transactionGroupID];
+            transactionGroupID = (transaction.transactionGroupID) ? transaction.transactionGroupID : "",
+            transactionNotes   = (transaction.transactionNotes) ? transaction.transactionNotes : "";
+        return [amount, transactionGroupID, transactionNotes];
     }
 };
 
