@@ -1,4 +1,4 @@
-import { UserProfile } from "./com.ingenico.mpos.sdk.data/user-profile";
+import { UserProfile } from "../data/user-profile";
 
 export class LoginResponse {
     responseCode: number;

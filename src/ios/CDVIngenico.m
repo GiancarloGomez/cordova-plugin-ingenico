@@ -1,521 +1,867 @@
-/********* CDVIngenico.m Cordova Plugin Implementation *******/
+/**
+ * CDVIngenico.m Cordova Plugin Implementation
+ */
 
+#import "CollectionFactory.h"
+#import "DeviceManagementHelper.h"
 #import <Cordova/CDV.h>
 #import <IngenicoMposSdk/Ingenico.h>
 #import <AVFoundation/AVFoundation.h>
 #import <LocalAuthentication/LocalAuthentication.h>
 
-#import "CollectionFactory.h"
-#import "DeviceManagementHelper.h"
+// used to track is SDK has been initialized
+static bool isSDKInitialized     = false;
+/**
+* @isAutoConnectRequest
+* Used throughout the connection process for sending back calls to cordova throught the process
+* This is set to true when connect() is invoked and false when selectDevice() is invoked
+*/
+static bool isAutoConnectRequest = false;
+// this is set when a custom device is selected using setDeviceType which then blocks doSetDefaultDeviceType
+static bool customDeviceSelected = false;
+// when searching for a device this is how long we will search before timing out ( ms )
+static long searchDuration       = 5000;
 
-static bool deviceConnected = NO;
-static bool isConnectingState = NO;
-static bool keepSearchingDevices = NO;
-static RUADeviceType _connectingDeviceType;
-static RUADevice *_connectingDevice;
-
-static NSString *clientVersion = nil;
-static NSString *baseURL = nil;
-static NSString *apiKey = nil;
-
-@interface CDVIngenico : CDVPlugin {
-  // Member variables go here.
-  NSString *callbackId;
-  NSString *searchCallbackId;
-  NSString *deviceDisconnectedCallbackId;
-  NSString *manualDeviceDisconnectionCallbackId;
-  NSMutableArray *deviceList;
+@interface CDVIngenico : CDVPlugin <RUADeviceSearchListener,RUAReleaseHandler,RUADeviceStatusHandler>{
+    // used to initialize SDK
+    NSString *apiKey;
+    NSString *baseURL;
+    NSString *clientVersion;
+    // set by doSearchDevice ( auto connect and manual search prior to select )
+    // and selectDevice ( manual selection )
+    NSString *connectCallbackID;
+    // stores list of available devices
+    NSMutableArray *deviceList;
+    // stores the supported devices
+    NSArray *supportedDevices;
+    // stores saved user profile from a login or refresh
+    IMSUserProfile *userProfile;
 }
-
+// Cordova Communication
+- (void)sendPluginResult:(NSString *)theCallbackID messageAsString:(NSString*)theMessage;
+- (void)sendPluginResult:(NSString *)theCallbackID messageAsString:(NSString*)theMessage keepCallbackAsBool:(BOOL)keepCallbackAsBool;
+- (void)sendPluginResult:(NSString *)theCallbackID messageAsBool:(BOOL)theMessage;
+- (void)sendPluginResult:(NSString *)theCallbackID messageAsBool:(BOOL)theMessage keepCallbackAsBool:(BOOL)keepCallbackAsBool;
+- (void)sendPluginResult:(NSString *)theCallbackID messageAsNSInteger:(NSInteger)theMessage;
+- (void)sendPluginError:(NSString *)theCallbackID messageAsNSInteger:(NSInteger)theMessage;
+- (void)sendPluginError:(NSString *)theCallbackID messageAsNSInteger:(NSInteger)theMessage keepCallbackAsBool:(BOOL)keepCallbackAsBool;
+- (void)sendPluginError:(NSString *)theCallbackID messageAsString:(NSString*)theMessage;
+// Authentication
 - (void)login:(CDVInvokedUrlCommand*)command;
+- (void)logoff:(CDVInvokedUrlCommand*)command;
+- (void)refreshUserSession:(CDVInvokedUrlCommand*)command;
+- (void)isLoggedIn:(CDVInvokedUrlCommand*)command;
+// Authentication Helpers
+- (void)doInitializeSDK;
+- (bool)doIsLoggedIn;
+- (void)doReturnUserProfile:(NSString *)theCallbackID;
+// Device Information
+- (void)getBatteryLevel:(CDVInvokedUrlCommand*)command;
+- (void)getDeviceType:(CDVInvokedUrlCommand*)command;
+// Device Connection
 - (void)connect:(CDVInvokedUrlCommand*)command;
 - (void)disconnect:(CDVInvokedUrlCommand*)command;
 - (void)isDeviceConnected:(CDVInvokedUrlCommand*)command;
-- (void)onDeviceDisconnected:(CDVInvokedUrlCommand*)command;
+// Connection Status Handlers
+- (void)onConnected;
+- (void)onDisconnected;
+- (void)onError:(NSString *)message;
+// Device Setup
 - (void)setDeviceType:(CDVInvokedUrlCommand*)command;
+- (void)selectDevice:(CDVInvokedUrlCommand*)command;
+// Device Setup Helpers
+- (void)doSetupDevice;
+// Device Search
 - (void)searchForDevice:(CDVInvokedUrlCommand*)command;
 - (void)stopSearchForDevice:(CDVInvokedUrlCommand*)command;
-- (void)selectDevice:(CDVInvokedUrlCommand*)command;
-- (void)setupDevice:(CDVInvokedUrlCommand*)command;
-- (void)doSetupDevice:(NSString*)callbackId;
-
-- (void)processCashTransaction:(CDVInvokedUrlCommand*)command;
-- (void)processCreditSaleTransactionWithCardReader:(CDVInvokedUrlCommand*)command;
-- (void)processDebitSaleTransactionWithCardReader:(CDVInvokedUrlCommand*)command;
-
-- (void)getReferenceForTransactionWithPendingSignature:(CDVInvokedUrlCommand*)command;
-- (void)uploadSignature:(CDVInvokedUrlCommand*)command;
-
-- (void)initiateScan:(CDVInvokedUrlCommand*)command;
+// Device Search Helpers
+- (void)doSearchForDevice:(NSString *)theCallbackID; // try/catch
+- (void)doStopSearch;
+// Search Listeners
+- (void)discoveredDevice:(RUADevice *)reader;
+- (void)discoveryComplete;
+// Transactions
+- (void)processCashTransaction:(CDVInvokedUrlCommand*)command; // try/catch
+- (void)processCreditSaleTransactionWithCardReader:(CDVInvokedUrlCommand*)command; // try/catch
+- (void)processDebitSaleTransactionWithCardReader:(CDVInvokedUrlCommand*)command;  // try/catch
+// Helpers
+- (bool)doCanExecute:(NSString *)theCallbackID;
+- (void)doSetSupportedDevices;
+- (void)doSetDefaultDeviceType;
 @end
 
 @implementation CDVIngenico
 
+#pragma mark - Cordova Communication
+- (void)sendPluginResult:(NSString *)theCallbackID messageAsString:(NSString*)theMessage
+{
+    CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:theMessage];
+    [self.commandDelegate sendPluginResult:result callbackId:theCallbackID];
+}
+
+- (void)sendPluginResult:(NSString *)theCallbackID messageAsString:(NSString*)theMessage keepCallbackAsBool:(BOOL)keepCallbackAsBool
+{
+    CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:theMessage];
+    if (keepCallbackAsBool)
+        [result setKeepCallbackAsBool:YES];
+    else
+        [result setKeepCallbackAsBool:NO];
+    [self.commandDelegate sendPluginResult:result callbackId:theCallbackID];
+}
+
+- (void)sendPluginResult:(NSString *)theCallbackID messageAsBool:(BOOL)theMessage
+{
+    CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsBool:theMessage];
+    [self.commandDelegate sendPluginResult:result callbackId:theCallbackID];
+}
+
+- (void)sendPluginResult:(NSString *)theCallbackID messageAsBool:(BOOL)theMessage keepCallbackAsBool:(BOOL)keepCallbackAsBool
+{
+    CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsBool:theMessage];
+    if (keepCallbackAsBool)
+        [result setKeepCallbackAsBool:YES];
+    else
+        [result setKeepCallbackAsBool:NO];
+    [self.commandDelegate sendPluginResult:result callbackId:theCallbackID];
+}
+
+- (void)sendPluginResult:(NSString *)theCallbackID messageAsNSInteger:(NSInteger)theMessage
+{
+    CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsNSInteger:theMessage];
+    [self.commandDelegate sendPluginResult:result callbackId:theCallbackID];
+}
+
+- (void)sendPluginError:(NSString *)theCallbackID messageAsNSInteger:(NSInteger)theMessage
+{
+    CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsNSInteger:theMessage];
+    [self.commandDelegate sendPluginResult:result callbackId:theCallbackID];
+}
+
+- (void)sendPluginError:(NSString *)theCallbackID messageAsNSInteger:(NSInteger)theMessage keepCallbackAsBool:(BOOL)keepCallbackAsBool
+{
+    CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsNSInteger:theMessage];
+    if (keepCallbackAsBool)
+        [result setKeepCallbackAsBool:YES];
+    else
+        [result setKeepCallbackAsBool:NO];
+    [self.commandDelegate sendPluginResult:result callbackId:theCallbackID];
+}
+
+- (void)sendPluginError:(NSString *)theCallbackID messageAsString:(NSString*)theMessage
+{
+    CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:theMessage];
+    [self.commandDelegate sendPluginResult:result callbackId:theCallbackID];
+}
+
+#pragma mark - Authentication
+
 - (void)login:(CDVInvokedUrlCommand*)command
- {
-    NSString *uname = [command.arguments objectAtIndex:0];
-    NSString *pw = [command.arguments objectAtIndex:1];
-    apiKey = [command.arguments objectAtIndex:2];
-    baseURL = [command.arguments objectAtIndex:3];
-    clientVersion = [command.arguments objectAtIndex:4];
+{
+    // initialize SDK
+    if ( !isSDKInitialized )
+    {
+        apiKey        = [command.arguments objectAtIndex:2];
+        baseURL       = [command.arguments objectAtIndex:3];
+        clientVersion = [command.arguments objectAtIndex:4];
+        [self doInitializeSDK];
+    }
 
-    [[Ingenico sharedInstance]
-    initializeWithBaseURL:baseURL apiKey:apiKey clientVersion:clientVersion];
+    // if not logged in
+    if ( ![self doIsLoggedIn] )
+    {
+        #ifdef DEBUG_MODE
+            NSLog(@"login() -> authenticate");
+        #endif
+        NSString *uname = [command.arguments objectAtIndex:0];
+        NSString *pw    = [command.arguments objectAtIndex:1];
+        // login and validate user authenticity to use the application
+        [[[Ingenico sharedInstance] User] loginwithUsername:uname andPassword:pw onResponse:^(IMSUserProfile *user, NSError *error) {
+            if( !error ){
+                userProfile = user;
+                [self doReturnUserProfile:command.callbackId];
+            }
+            else
+            {
+                [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
+            }
+        }];
+    }
+    // return user profile
+    else
+    {
+        [self doReturnUserProfile:command.callbackId];
+    }
+}
 
-    [[[Ingenico sharedInstance] User] loginwithUsername:uname andPassword:pw onResponse:^(IMSUserProfile *user, NSError *error) {
+- (void)logoff:(CDVInvokedUrlCommand*)command
+{
+    // process logoff
+    if ( [self doIsLoggedIn] )
+    {
+        #ifdef DEBUG_MODE
+            NSLog(@"logoff()");
+        #endif
+        [[Ingenico sharedInstance].User logoff:^(NSError *error) {
+           if( !error )
+            {
+                bool deviceConnected = [[[Ingenico sharedInstance] PaymentDevice] isConnected];
+                #ifdef DEBUG_MODE
+                    NSLog(@"Device connected at logoff = %d",deviceConnected);
+                #endif
+                // disconnect device if one connected
+                if (deviceConnected)
+                    [[Ingenico sharedInstance].PaymentDevice releaseDevice:self];
+                [self sendPluginResult:command.callbackId messageAsBool:true];
+            }
+            else
+            {
+                [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
+            }
+            // reset userProfile
+            userProfile = nil;
+        }];
+    }
+    // return false if not logged in
+    else
+    {
+        [self sendPluginResult:command.callbackId messageAsBool:false];
+    }
+}
 
-        CDVPluginResult* pluginResult = nil;
-        if(!error){
-            NSString *JSONuser = [user JSONString];
-            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:JSONuser];
+- (void)refreshUserSession:(CDVInvokedUrlCommand*)command
+{
+    if ( [self doIsLoggedIn] )
+    {
+        #ifdef DEBUG_MODE
+            NSLog(@"refreshUserSession()");
+        #endif
+        [[Ingenico sharedInstance].User refreshUserSession:^(IMSUserProfile *user, NSError *error) {
+            if( !error )
+            {
+                userProfile = user;
+                [self doReturnUserProfile:command.callbackId];
+            }
+            else
+            {
+                [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
+            }
+        }];
+    }
+    // return false if not logged in
+    else
+    {
+        [self sendPluginResult:command.callbackId messageAsBool:false];
+    }
+}
 
-        } else {
-            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:error.localizedDescription];
-        }
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+- (void)isLoggedIn:(CDVInvokedUrlCommand*)command
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"isLoggedIn");
+    #endif
+    [self sendPluginResult:command.callbackId messageAsBool:[self doIsLoggedIn]];
+}
+
+#pragma mark - Authentication Helpers
+
+- (void)doInitializeSDK
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"doInitializeSDK");
+    #endif
+    [[Ingenico sharedInstance] initializeWithBaseURL:baseURL apiKey:apiKey clientVersion:clientVersion];
+    // set up our supported devices
+    [self doSetSupportedDevices];
+    // set the default device that can be changed with setDeviceType
+    [self doSetDefaultDeviceType];
+    isSDKInitialized = true;
+}
+
+- (bool)doIsLoggedIn
+{
+    #ifdef DEBUG_MODE
+    NSLog(@"doIsLoggedIn");
+    #endif
+    bool loggedIn = false;
+    if ( isSDKInitialized && userProfile )
+    {
+        NSDate *localTime= [NSDate date];
+        // set formatter to work with expires time
+        NSDateFormatter *dateFormatter = [[NSDateFormatter alloc]init];
+        [dateFormatter setDateFormat:@"yyyyMMddHHmmss"];
+        // set formatter to UTC as time is GMT from Ingenico
+        [dateFormatter setTimeZone:[NSTimeZone timeZoneWithAbbreviation:@"UTC"]];
+        // create timeout date from userProfile.session.expiresTime
+        NSDate *timeoutDate = [dateFormatter dateFromString:userProfile.session.expiresTime];
+        // change formatter time zone to local ( does the change automatically )
+        [dateFormatter setTimeZone:[NSTimeZone systemTimeZone]];
+        #ifdef DEBUG_MODE
+        NSLog(@"%@",userProfile.session.expiresTime);
+        NSLog(@"Local Time @ => %@",localTime);
+        NSLog(@"Session Expires @ => %@",timeoutDate);
+        #endif
+        // compare our dates
+        NSComparisonResult result = [localTime compare:timeoutDate];
+        loggedIn = result == NSOrderedAscending;
+    }
+    // reset userProfile if not logged in but userProfile is not nil
+    if (!loggedIn && userProfile)
+        userProfile = nil;
+    // return boolean
+    return loggedIn;
+}
+
+- (void)doReturnUserProfile:(NSString *)theCallbackID
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"doReturnUserProfile");
+        NSLog(@"%@",userProfile.session);
+    #endif
+    NSString *JSONResponse = [userProfile JSONString];
+    [self sendPluginResult:theCallbackID messageAsString:JSONResponse];
+}
+
+#pragma mark - Device Information
+
+- (void)getBatteryLevel:(CDVInvokedUrlCommand*)command;
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"getBatteryLevel()");
+    #endif
+    [[Ingenico sharedInstance].PaymentDevice getDeviceBatteryLevel:^(NSInteger batteryLevel, NSError *error) {
+        if( !error )
+            [self sendPluginResult:command.callbackId messageAsNSInteger:batteryLevel];
+        else
+            [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
     }];
- }
+}
 
+- (void)getDeviceType:(CDVInvokedUrlCommand*)command;
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"getDeviceType()");
+    #endif
+    RUADeviceType _deviceType = [[Ingenico sharedInstance].PaymentDevice getType];
+    [self sendPluginResult:command.callbackId messageAsNSInteger:_deviceType];
+}
+
+#pragma mark - Device Connection
+
+// search -> setup ( auto connect to first valid device found )
 - (void)connect:(CDVInvokedUrlCommand*)command
 {
-    NSLog(@"Connect");
-    CDVPluginResult* pluginResult = nil;
-    @try {
-        [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeRP750x];  // It is indicated by default to start the search. Then the type is indicated depending on the selected device
-        [[Ingenico sharedInstance].PaymentDevice search:self];
-        searchCallbackId = command.callbackId;
-        deviceList = [[NSMutableArray alloc] init];
-        isConnectingState = YES;
-        keepSearchingDevices = YES;
-    }
-    @catch ( NSException *e ) {
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:e.reason];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    #ifdef DEBUG_MODE
+        NSLog(@"connect()");
+    #endif
+    if ([self doCanExecute:command.callbackId])
+    {
+        isAutoConnectRequest = true;
+        [self doSearchForDevice:command.callbackId];
     }
 }
 
+// manual disconnect -> fires off done()
 - (void)disconnect:(CDVInvokedUrlCommand*)command
 {
-    NSLog(@"Disconnect");
-    manualDeviceDisconnectionCallbackId = command.callbackId;
-    [[Ingenico sharedInstance].PaymentDevice releaseDevice:self];
-}
-
-#pragma RUAReleaseHandler implementation
-- (void)done {
-    /* Invoked when a device manager releases all the resources it acquired. */
-    CDVPluginResult* pluginResult = nil;
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"true"];
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:manualDeviceDisconnectionCallbackId];
-}
-
-- (void)onDeviceDisconnected:(CDVInvokedUrlCommand*)command
-{
-    NSLog(@"OnDeviceDisconnected");
-    deviceDisconnectedCallbackId = command.callbackId;
+    #ifdef DEBUG_MODE
+        NSLog(@"disconnect()");
+    #endif
+    if ([[[Ingenico sharedInstance] PaymentDevice] isConnected])
+        [[Ingenico sharedInstance].PaymentDevice releaseDevice:self];
 }
 
 - (void)isDeviceConnected:(CDVInvokedUrlCommand*)command
 {
-    NSLog(@"isDeviceConnected");
-    CDVPluginResult* pluginResult = nil;
-    if ( deviceConnected == YES) {
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"true"];
-    } else {
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"false"];
-    }
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    #ifdef DEBUG_MODE
+        NSLog(@"isDeviceConnected()");
+    #endif
+    bool deviceConnected = [[[Ingenico sharedInstance] PaymentDevice] isConnected];
+    [self sendPluginResult:command.callbackId messageAsBool:deviceConnected];
 }
+
+#pragma mark - Connection Status Handlers
+
+// Invoked when the reader is connected
+- (void)onConnected
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"onConnected()");
+    #endif
+    [self doSetupDevice];
+    [self sendPluginResult:connectCallbackID messageAsString:@"connected" keepCallbackAsBool:true];
+}
+
+// Invoked when the reader is disconnected
+- (void)onDisconnected
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"onDisconnected()");
+    #endif
+    [self sendPluginResult:connectCallbackID messageAsString:@"disconnected" keepCallbackAsBool:false];
+}
+
+// Invoked when the reader returns an error while connecting
+- (void)onError:(NSString *)message
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"onError() -> %@",message);
+    #endif
+    [self doSearchForDevice:connectCallbackID];
+}
+
+// Invoked when a device manager releases all the resources it acquired ( manual disconnect )
+// This requires an SDK reinit and login
+- (void)done
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"done()");
+    #endif
+    userProfile = nil;
+    isSDKInitialized = false;
+    [self doInitializeSDK];
+}
+
+#pragma mark - Device Setup
 
 - (void)setDeviceType:(CDVInvokedUrlCommand*)command
 {
-    CDVPluginResult* pluginResult = nil;
-    NSString *deviceType = [command.arguments objectAtIndex:0];
-    bool ok = false;
-
-    if ([deviceType isEqualToString:@"RUADeviceTypeG4x"]){
-        [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeG4x];
-        ok = true;
-    } else if ([deviceType isEqualToString:@"RUADeviceTypeRP45BT"]){
-        [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeRP45BT];
-        ok = true;
-    } else if ([deviceType isEqualToString:@"RUADeviceTypeRP350x"]){
-        [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeRP350x];
-        ok = true;
-    } else if ([deviceType isEqualToString:@"RUADeviceTypeRP450c"]){
-        [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeRP450c];
-        ok = true;
-    } else if ([deviceType isEqualToString:@"RUADeviceTypeRP750x"]){
-        [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeRP750x];
-        ok = true;
-    } else if ([deviceType isEqualToString:@"RUADeviceTypeMOBY3000"]){
-        [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeMOBY3000];
-        ok = true;
-    } else if ([deviceType isEqualToString:@"RUADeviceTypeMOBY8500"]){
-        [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeMOBY8500];
-        ok = true;
-    } else {
-        [[Ingenico sharedInstance].PaymentDevice setDeviceType:nil];
-        ok = true;
+    #ifdef DEBUG_MODE
+        NSLog(@"setDeviceType()");
+    #endif
+    if ([self doCanExecute:command.callbackId])
+    {
+        NSString *deviceType = [command.arguments objectAtIndex:0];
+        bool deviceSupported = false;
+        // check if deviceType sent is supported
+        for ( id supportedDevice in supportedDevices )
+        {
+            #ifdef DEBUG_MODE
+                NSLog(@"%@ %@",deviceType,supportedDevice);
+            #endif
+            if ( [deviceType containsString:supportedDevice] )
+            {
+                #ifdef DEBUG_MODE
+                    NSLog(@"We have a match");
+                #endif
+                deviceSupported = true;
+                break;
+            }
+        }
+        // continue to set if device supported
+        if ( deviceSupported )
+        {
+            if ( [deviceType isEqualToString:@"RUADeviceTypeRP450c"] )
+                [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeRP450c];
+            else if ( [deviceType isEqualToString:@"RUADeviceTypeRP750x"] )
+                [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeRP750x];
+            else if ( [deviceType isEqualToString:@"RUADeviceTypeMOBY3000"] )
+                [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeMOBY3000];
+            else if ( [deviceType isEqualToString:@"RUADeviceTypeMOBY8500"] )
+                [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeMOBY8500];
+            else
+                deviceSupported = false;
+        }
+        // mark that specific device set
+        customDeviceSelected = deviceSupported;
+        // respond
+        [self sendPluginResult:command.callbackId messageAsBool:deviceSupported];
     }
-
-    if (ok == true){
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"true"];
-    } else {
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:deviceType];
-    }
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId]  ;
 }
+
+// initialize + setup
+- (void)selectDevice:(CDVInvokedUrlCommand*)command
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"selectDevice()");
+    #endif
+    if ([self doCanExecute:command.callbackId])
+    {
+        connectCallbackID       = command.callbackId;
+        NSString *deviceJSON    = [command.arguments objectAtIndex:0];
+        RUADevice *deviceIn     = [RUADevice objectWithJSONString:deviceJSON];
+        bool deviceSeleted      = false;
+        for( RUADevice *device in deviceList )
+        {
+            if( [device.identifier isEqualToString:deviceIn.identifier] )
+            {
+                [[Ingenico sharedInstance].PaymentDevice select:device];
+                [[Ingenico sharedInstance].PaymentDevice initialize:self];
+                deviceSeleted = true;
+                break;
+            }
+        }
+        [self sendPluginResult:connectCallbackID messageAsBool:deviceSeleted keepCallbackAsBool:deviceSeleted];
+    }
+}
+
+#pragma mark - Device Setup Helpers
+
+- (void)doSetupDevice
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"doSetupDevice()");
+    #endif
+
+    [[[Ingenico sharedInstance] PaymentDevice] checkDeviceSetup:^(NSError *error,bool isSetupRequired) {
+        if( !error )
+        {
+            #ifdef DEBUG_MODE
+                NSLog(@"doSetupDevice()->isRequired");
+            #endif
+            if(isSetupRequired)
+            {
+                #ifdef DEBUG_MODE
+                    NSLog(@"=> SetupRequired");
+                #endif
+                [[Ingenico sharedInstance].PaymentDevice setup:^(NSError *error) {
+                    if( !error )
+                    {
+                        [self sendPluginResult:connectCallbackID messageAsString:@"ready" keepCallbackAsBool:true];
+                    }
+                    else
+                    {
+                        NSString *_err = [NSString stringWithFormat:@"error:%ld",(long)error.code];
+                        #ifdef DEBUG_MODE
+                            NSLog(@"doSetupDevice()->Error-> %ld : %@",(long)error.code,error.description);
+                        #endif
+                        [self sendPluginResult:connectCallbackID messageAsString:_err keepCallbackAsBool:false];
+
+                    }
+                }];
+            }
+            else
+            {
+                #ifdef DEBUG_MODE
+                    NSLog(@"=> SetupNotRequired");
+                #endif
+                [self sendPluginResult:connectCallbackID messageAsString:@"ready" keepCallbackAsBool:true];
+            }
+        }
+        else
+        {
+            NSString *_err = [NSString stringWithFormat:@"error:%ld",(long)error.code];
+            #ifdef DEBUG_MODE
+                NSLog(@"doSetupDevice()->Error-> %ld : %@",(long)error.code,error.description);
+            #endif
+            [self sendPluginResult:connectCallbackID messageAsString:_err keepCallbackAsBool:false];
+        }
+    }];
+}
+
+#pragma mark - Device Search
 
 - (void)searchForDevice:(CDVInvokedUrlCommand*)command
 {
-    [self doSearchForDevice:command.callbackId];
-}
-
-- (void)doSearchForDevice:(NSString *)callbackId
-{
-    CDVPluginResult* pluginResult = nil;
-    @try {
-        [[Ingenico sharedInstance].PaymentDevice search:self];
-        searchCallbackId = callbackId;
-        deviceList = [[NSMutableArray alloc] init];
-    }
-    @catch ( NSException *e ) {
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:e.reason];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
+    #ifdef DEBUG_MODE
+        NSLog(@"searchForDevice()");
+    #endif
+    if ([self doCanExecute:command.callbackId])
+    {
+        isAutoConnectRequest = false;
+        [self doSearchForDevice:command.callbackId];
     }
 }
 
 - (void)stopSearchForDevice:(CDVInvokedUrlCommand*)command
 {
-    NSLog(@"StopSearchForDevice");
-    keepSearchingDevices = NO;
-
-    CDVPluginResult* pluginResult = nil;
-
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"true"];
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId]  ;
-}
-
-#pragma RUAStatusHandler implementation
-
-- (void)onConnected {
-    NSLog(@"Connected");
-    CDVPluginResult* pluginResult = nil;
-
-    if (isConnectingState == YES) {
-        isConnectingState = NO;
-        [self doSetupDevice:searchCallbackId];
-    } else {
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"true"];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
-    }
-    deviceConnected = YES;
-}
-
-- (void)onDisconnected {
-    NSLog(@"Disconnected");
-    deviceConnected = NO;
-    if (deviceDisconnectedCallbackId != nil){
-        CDVPluginResult* pluginResult = nil;
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"true"];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:deviceDisconnectedCallbackId];
+    #ifdef DEBUG_MODE
+        NSLog(@"stopSearchForDevice()");
+    #endif
+    if ([self doCanExecute:command.callbackId])
+    {
+        [self doStopSearch];
+        [self sendPluginResult:command.callbackId messageAsBool:true];
     }
 }
 
-- (void)onError:(NSString *)message {
-    NSLog(@"Error");
-    NSLog(message);
-    deviceConnected = NO;
-    [self doSearchForDevice:searchCallbackId];
+#pragma mark - Device Search Helpers
+
+// Invoked by connect, searchForDevice and onError
+- (void)doSearchForDevice:(NSString *)theCallbackID
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"doSearchForDevice()");
+    #endif
+    @try
+    {
+        [[Ingenico sharedInstance].PaymentDevice searchForDuration:searchDuration andListener:self];
+        // set callback id to use throughout process
+        connectCallbackID = theCallbackID;
+        // reset device list to empty array
+        deviceList = [[NSMutableArray alloc] init];
+    }
+    @catch ( NSException *e )
+    {
+        [self sendPluginError:theCallbackID messageAsString:e.reason];
+    }
 }
 
-#pragma RUADelegate implementation
+// Invoked by stopSearchForDevice
+- (void)doStopSearch
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"stopSearch()");
+    #endif
+    [[Ingenico sharedInstance].PaymentDevice stopSearch];
+}
 
-- (void)discoveredDevice:(RUADevice *)reader {
-    bool isIncluded = false;
-    for(RUADevice *device in deviceList){
-        if([device.identifier isEqualToString:reader.identifier]){
-            isIncluded = true;
-            break;
+#pragma mark - Search Listeners
+
+- (void)discoveredDevice:(RUADevice *)reader
+{
+    // only work with results with a name and identifier
+    if(reader.name && reader.identifier)
+    {
+        bool isIncluded = false;
+        bool addToList  = false;
+        // if device is already in list break out
+        for( RUADevice *device in deviceList )
+        {
+            if( [device.identifier isEqualToString:reader.identifier] )
+            {
+                isIncluded = true;
+                break;
+            }
         }
-    }
-    if(!isIncluded && reader.name!= NULL){
-        NSArray *array = [reader.name componentsSeparatedByString:@"-"];
-        NSString *deviceType = array[0];
-
-        bool ok = false;
-
-        if ([deviceType isEqualToString:@"G4x"]){
-            [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeG4x];
-            ok = true;
-        } else if ([deviceType isEqualToString:@"RP45BT"]){
-            [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeRP45BT];
-            ok = true;
-        } else if ([deviceType isEqualToString:@"RP350"]){
-            [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeRP350x];
-            ok = true;
-        } else if ([deviceType isEqualToString:@"RP450"]){
-            [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeRP450c];
-            ok = true;
-        } else if ([deviceType isEqualToString:@"RP750"]){
-            [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeRP750x];
-            ok = true;
-        } else if ([deviceType isEqualToString:@"MOBY3000"]){
-            [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeMOBY3000];
-            ok = true;
-        } else if ([deviceType isEqualToString:@"MOBY8500"]){
-            [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeMOBY8500];
-            ok = true;
-        }
-
-        if (ok) {
+        // only add devices that match any of the following types
+        NSArray  *deviceArray = [reader.name componentsSeparatedByString:@"-"];
+        NSString *deviceType  = deviceArray[0];
+        // check if device is in allowed devices
+        if ( [supportedDevices containsObject:deviceType] )
+            addToList = true;
+        // add to list if validates
+        if ( !isIncluded && addToList )
+        {
+            #ifdef DEBUG_MODE
+                NSLog(@"discoveredDevice() -> %@",reader.name);
+            #endif
             [deviceList addObject:reader];
-            NSLog(@"New device discovered");
         }
     }
 }
 
-- (void)discoveryComplete {
-    NSLog(@"Discovery Completed");
-    CDVPluginResult* pluginResult = nil;
-
-    if (isConnectingState == NO) {
-        NSString *json = [deviceList JSONString];
-
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:json];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:searchCallbackId];
-    } else {
-        if ([deviceList count] > 0){
-            NSLog(@"Selecting device");
+// on auto connect (initialize + setup) | on search return device array
+- (void)discoveryComplete
+{
+    if ( isAutoConnectRequest )
+    {
+        #ifdef DEBUG_MODE
+            NSLog(@"discoveryComplete() => Auto Connect Lookup Result %lu",(unsigned long)[deviceList count]);
+        #endif
+        if ( [deviceList count] > 0 )
+        {
+            #ifdef DEBUG_MODE
+                NSLog(@"Selecting device");
+            #endif
             RUADevice *device = deviceList[0];
             [[Ingenico sharedInstance].PaymentDevice select:device];
             [[Ingenico sharedInstance].PaymentDevice initialize:self];
-        } else {
-            if (keepSearchingDevices == YES) {
-                NSLog(@"Keep searching until a device is found");
-                [self doSearchForDevice:searchCallbackId];
-            } else {
-                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"false"];
-                [self.commandDelegate sendPluginResult:pluginResult callbackId:searchCallbackId];
-            }
+            [self sendPluginResult:connectCallbackID messageAsString:@"selected" keepCallbackAsBool:true];
         }
+        else
+        {
+            [self sendPluginResult:connectCallbackID messageAsBool:false keepCallbackAsBool:false];
+        }
+    }
+    else
+    {
+        #ifdef DEBUG_MODE
+            NSLog(@"discoveryComplete() => Manual Lookup");
+        #endif
+        NSString *JSONResponse = [deviceList JSONString];
+        [self sendPluginResult:connectCallbackID messageAsString:JSONResponse keepCallbackAsBool:false];
     }
 }
 
-- (void)selectDevice:(CDVInvokedUrlCommand*)command
-{
-    callbackId = command.callbackId;
-    NSString *deviceJSON = [command.arguments objectAtIndex:0];
-    RUADevice *deviceIn = [RUADevice objectWithJSONString:deviceJSON];
-    bool ok = false;
-    for(RUADevice *device in deviceList){
-        if([device.identifier isEqualToString:deviceIn.identifier]){
-            [[Ingenico sharedInstance].PaymentDevice select:device];
-            [[Ingenico sharedInstance].PaymentDevice initialize:self];
-
-            ok = true;
-            break;
-        }
-    }
-
-    CDVPluginResult* pluginResult = nil;
-    if (ok != true) {
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"false"];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-    }
-}
-
-- (void)setupDevice:(CDVInvokedUrlCommand*)command {
-    [self doSetupDevice:command.callbackId];
-}
-
-- (void)doSetupDevice:(NSString *)callbackId {
-    NSLog(@"doSetupDevice");
-    [[[Ingenico sharedInstance] PaymentDevice] checkDeviceSetup:^(NSError *error,bool isSetupRequired) {
-        if(error){
-            CDVPluginResult* pluginResult = nil;
-            NSString *responseCode = [NSString stringWithFormat:@"%i", error.code];
-            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:responseCode];
-            [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
-        } else {
-            if(isSetupRequired){
-                [[Ingenico sharedInstance].PaymentDevice setup:^(NSError *error) {
-                    CDVPluginResult* pluginResult = nil;
-                    if(error){
-                        NSString *responseCode = [NSString stringWithFormat:@"%i", error.code];
-                        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:responseCode];
-                    } else{
-                        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"true"];
-                    }
-                    [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
-                }];
-            } else {
-                CDVPluginResult* pluginResult = nil;
-                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"true"];
-                [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
-            }
-        }
-    }];
-}
+#pragma mark - Transactions
 
 - (void)processCashTransaction:(CDVInvokedUrlCommand*)command
 {
-    CDVPluginResult* pluginResult = nil;
-    @try {
-        NSString *amountJSON         = [command.arguments objectAtIndex:0];
-        NSString *transactionGroupID = [command.arguments objectAtIndex:1];
-        NSString *transactionNotes   = [command.arguments objectAtIndex:2];
-        IMSAmount *amount            = [IMSAmount objectWithJSONString:amountJSON];
-
-        IMSCashSaleTransactionRequest *request = [[IMSCashSaleTransactionRequest alloc] initWithAmount:amount
-                                                    andProducts:nil
-                                                    andClerkID:nil
-                                                    andLongitude:nil
-                                                    andLatitude:nil
-                                                    andTransactionGroupID:transactionGroupID
-                                                    andTransactionNotes:transactionNotes
-                                                    andMerchantInvoiceID:nil
-                                                    andShowNotesAndInvoiceOnReceipt:false
-                                                ];
-
-        [[Ingenico sharedInstance].Payment processCashTransaction:request andOnDone:^(IMSTransactionResponse *response, NSError *error)
+    #ifdef DEBUG_MODE
+        NSLog(@"processCashTransaction()");
+    #endif
+    if ([self doCanExecute:command.callbackId])
+    {
+        @try
         {
-            CDVPluginResult* pluginResult = nil;
-            if(!error){
-                NSString *JSONresponse = [response JSONString];
-                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:JSONresponse];
-            } else {
-                NSString *responseCode = [NSString stringWithFormat:@"%i", error.code];
-                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:responseCode];
-            }
+            NSString *amountJSON         = [command.arguments objectAtIndex:0];
+            NSString *transactionGroupID = [command.arguments objectAtIndex:1];
+            NSString *transactionNotes   = [command.arguments objectAtIndex:2];
+            // prepare for transaction
+            transactionGroupID = [transactionGroupID isEqual:[NSNull null]] ? nil : transactionGroupID;
+            transactionNotes   = [transactionNotes isEqual:[NSNull null]] ? nil : transactionNotes;
+            IMSAmount *amount  = [IMSAmount objectWithJSONString:amountJSON];
 
-            [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-        }];
-    }
-    @catch ( NSException *e ) {
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:e.reason];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+            IMSCashSaleTransactionRequest *request = [[IMSCashSaleTransactionRequest alloc] initWithAmount:amount
+                                                                                               andProducts:nil
+                                                                                                andClerkID:nil
+                                                                                              andLongitude:nil
+                                                                                               andLatitude:nil
+                                                                                     andTransactionGroupID:transactionGroupID
+                                                                                       andTransactionNotes:transactionNotes
+                                                                                      andMerchantInvoiceID:nil
+                                                                           andShowNotesAndInvoiceOnReceipt:false ];
+
+            [[Ingenico sharedInstance].Payment processCashTransaction:request andOnDone:^(IMSTransactionResponse *response, NSError *error)
+            {
+                 if( !error )
+                 {
+                     NSString *JSONResponse = [response JSONString];
+                     [self sendPluginResult:command.callbackId messageAsString:JSONResponse];
+                 }
+                 else
+                 {
+                     [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
+                 }
+            }];
+        }
+        @catch ( NSException *e )
+        {
+           [self sendPluginError:command.callbackId messageAsString:e.reason];
+        }
     }
 }
 
 - (void)processCreditSaleTransactionWithCardReader:(CDVInvokedUrlCommand*)command
 {
-    CDVPluginResult* pluginResult = nil;
-    @try {
-        NSString *amountJSON         = [command.arguments objectAtIndex:0];
-        NSString *transactionGroupID = [command.arguments objectAtIndex:1];
-        NSString *transactionNotes   = [command.arguments objectAtIndex:2];
-        IMSAmount *amount            = [IMSAmount objectWithJSONString:amountJSON];
+    #ifdef DEBUG_MODE
+        NSLog(@"processCreditSaleTransactionWithCardReader()");
+    #endif
+    if ([self doCanExecute:command.callbackId])
+    {
+        @try
+        {
+            NSString *amountJSON         = [command.arguments objectAtIndex:0];
+            NSString *transactionGroupID = [command.arguments objectAtIndex:1];
+            NSString *transactionNotes   = [command.arguments objectAtIndex:2];
+            // prepare for transaction
+            transactionGroupID = [transactionGroupID isEqual:[NSNull null]] ? nil : transactionGroupID;
+            transactionNotes   = [transactionNotes isEqual:[NSNull null]] ? nil : transactionNotes;
+            IMSAmount *amount  = [IMSAmount objectWithJSONString:amountJSON];
 
-        IMSCreditSaleTransactionRequest *request = [[IMSCreditSaleTransactionRequest alloc] initWithAmount:amount
-                                                    andProducts:nil
-                                                    andClerkID:nil
-                                                    andLongitude:nil
-                                                    andLatitude:nil
-                                                    andTransactionGroupID:transactionGroupID
-                                                    andTransactionNotes:transactionNotes
-                                                    andMerchantInvoiceID:nil
-                                                    andShowNotesAndInvoiceOnReceipt:false
-                                                ];
+            IMSCreditSaleTransactionRequest *request = [[IMSCreditSaleTransactionRequest alloc] initWithAmount:amount
+                                                                                                   andProducts:nil
+                                                                                                    andClerkID:nil
+                                                                                                  andLongitude:nil
+                                                                                                   andLatitude:nil
+                                                                                         andTransactionGroupID:transactionGroupID
+                                                                                           andTransactionNotes:transactionNotes
+                                                                                          andMerchantInvoiceID:nil
+                                                                               andShowNotesAndInvoiceOnReceipt:false ];
 
-        [[Ingenico sharedInstance].Payment processCreditSaleTransactionWithCardReader:request
-            andUpdateProgress:^(IMSProgressMessage message, NSString *extraMessage) { }
-            andSelectApplication:^(NSArray *applicationList, NSError *error, ApplicationSelectedResponse appReponse) {
-                appReponse((RUAApplicationIdentifier *)[applicationList objectAtIndex:0]);
-            }
-            andOnDone:^(IMSTransactionResponse *response, NSError *error) {
-                CDVPluginResult* pluginResult = nil;
-                if(!error){
-                    NSString *JSONresponse = [response JSONString];
-                    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:JSONresponse];
-                } else {
-                    NSString *responseCode = [NSString stringWithFormat:@"%i", error.code];
-                    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:responseCode];
+            [[Ingenico sharedInstance].Payment processCreditSaleTransactionWithCardReader:request
+                                                                        andUpdateProgress:^(IMSProgressMessage message, NSString *extraMessage) { }
+                                                                     andSelectApplication:^(NSArray *applicationList, NSError *error, ApplicationSelectedResponse appReponse) {
+                                                                         appReponse((RUAApplicationIdentifier *)[applicationList objectAtIndex:0]);
+                                                                     }
+                                                                                andOnDone:^(IMSTransactionResponse *response, NSError *error)
+            {
+                if( !error )
+                {
+                    NSString *JSONResponse = [response JSONString];
+                    [self sendPluginResult:command.callbackId messageAsString:JSONResponse];
                 }
-
-                [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+                else
+                {
+                    [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
+                }
             }];
-    }
-    @catch ( NSException *e ) {
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:e.reason];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        }
+        @catch ( NSException *e )
+        {
+            [self sendPluginError:command.callbackId messageAsString:e.reason];
+        }
     }
 }
 
 - (void)processDebitSaleTransactionWithCardReader:(CDVInvokedUrlCommand*)command
 {
-    CDVPluginResult* pluginResult = nil;
-    @try {
-        NSString *amountJSON         = [command.arguments objectAtIndex:0];
-        NSString *transactionGroupID = [command.arguments objectAtIndex:1];
-        NSString *transactionNotes   = [command.arguments objectAtIndex:2];
-        IMSAmount *amount            = [IMSAmount objectWithJSONString:amountJSON];
+    #ifdef DEBUG_MODE
+        NSLog(@"processDebitSaleTransactionWithCardReader()");
+    #endif
+    if ([self doCanExecute:command.callbackId])
+    {
+        @try
+        {
+            NSString *amountJSON         = [command.arguments objectAtIndex:0];
+            NSString *transactionGroupID = [command.arguments objectAtIndex:1];
+            NSString *transactionNotes   = [command.arguments objectAtIndex:2];
+            // prepare for transaction
+            transactionGroupID = [transactionGroupID isEqual:[NSNull null]] ? nil : transactionGroupID;
+            transactionNotes   = [transactionNotes isEqual:[NSNull null]] ? nil : transactionNotes;
+            IMSAmount *amount  = [IMSAmount objectWithJSONString:amountJSON];
 
-        IMSDebitSaleTransactionRequest *request = [[IMSDebitSaleTransactionRequest alloc] initWithAmount:amount
-                                                    andProducts:nil
-                                                    andClerkID:nil
-                                                    andLongitude:nil
-                                                    andLatitude:nil
-                                                    andTransactionGroupID:transactionGroupID
-                                                    andTransactionNotes:transactionNotes
-                                                    andMerchantInvoiceID:nil
-                                                    andShowNotesAndInvoiceOnReceipt:false
-                                                ];
+            IMSDebitSaleTransactionRequest *request = [[IMSDebitSaleTransactionRequest alloc] initWithAmount:amount
+                                                                                                 andProducts:nil
+                                                                                                  andClerkID:nil
+                                                                                                andLongitude:nil
+                                                                                                 andLatitude:nil
+                                                                                       andTransactionGroupID:transactionGroupID
+                                                                                         andTransactionNotes:transactionNotes
+                                                                                        andMerchantInvoiceID:nil
+                                                                             andShowNotesAndInvoiceOnReceipt:false ];
 
-        [[Ingenico sharedInstance].Payment processDebitSaleTransactionWithCardReader:request
-            andUpdateProgress:^(IMSProgressMessage message, NSString *extraMessage) { }
-            andSelectApplication:^(NSArray *applicationList, NSError *error, ApplicationSelectedResponse appReponse) {
-                appReponse((RUAApplicationIdentifier *)[applicationList objectAtIndex:0]);
-            }
-            andOnDone:^(IMSTransactionResponse *response, NSError *error) {
-                CDVPluginResult* pluginResult = nil;
-                if(!error){
-                    NSString *JSONresponse = [response JSONString];
-                    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:JSONresponse];
-                } else {
-                    NSString *responseCode = [NSString stringWithFormat:@"%i", error.code];
-                    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:responseCode];
+            [[Ingenico sharedInstance].Payment processDebitSaleTransactionWithCardReader:request
+                                                                       andUpdateProgress:^(IMSProgressMessage message, NSString *extraMessage) { }
+                                                                    andSelectApplication:^(NSArray *applicationList, NSError *error, ApplicationSelectedResponse appReponse) {
+                                                                        appReponse((RUAApplicationIdentifier *)[applicationList objectAtIndex:0]);
+                                                                    }
+                                                                               andOnDone:^(IMSTransactionResponse *response, NSError *error)
+            {
+                if( !error )
+                {
+                    NSString *JSONResponse = [response JSONString];
+                    [self sendPluginResult:command.callbackId messageAsString:JSONResponse];
                 }
-
-                [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+                else
+                {
+                    [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
+                }
             }];
-    }
-    @catch ( NSException *e ) {
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:e.reason];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-    }
-}
-
-- (void)getReferenceForTransactionWithPendingSignature:(CDVInvokedUrlCommand*)command {
-    NSString *txnID = [[Ingenico sharedInstance].Payment getReferenceForTransactionWithPendingSignature];
-    CDVPluginResult* pluginResult = nil;
-
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:txnID];
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void)uploadSignature:(CDVInvokedUrlCommand*)command {
-    NSString *transactionReference = [command.arguments objectAtIndex:0];
-    NSString *signatureImage = [command.arguments objectAtIndex:1];
-
-    NSLog(@"Transaction Reference");
-    NSLog(transactionReference);
-    NSLog(@"Signature Image");
-    NSLog(signatureImage);
-
-    [[Ingenico sharedInstance].User uploadSignatureForTransactionWithId:transactionReference
-                                        andSignature:signatureImage
-                                        andOnDone:^(NSError *error) {
-        CDVPluginResult* pluginResult = nil;
-        if(error){
-            /*Send email receipt failed(code in the response will indicates the result)*/
-            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:error.localizedDescription];
-        } else {
-            /*Send email receipt succeeded*/
-            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"true"];
         }
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-    }];
+        @catch ( NSException *e )
+        {
+            [self sendPluginError:command.callbackId messageAsString:e.reason];
+        }
+    }
 }
+
+#pragma mark - Helpers
+
+- (bool)doCanExecute:(NSString *)theCallbackID
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"doCanExecute()");
+    #endif
+    bool canExecute = isSDKInitialized && userProfile;
+    // send error if can not execute
+    if ( !canExecute )
+        [self sendPluginError:theCallbackID messageAsString:@"Initialize SDK and Login"];
+    return canExecute;
+}
+
+- (void)doSetSupportedDevices
+{
+    // setup supported devices if not yet set
+    if ( !supportedDevices )
+    {
+        #ifdef DEBUG_MODE
+            NSLog(@"doSetSupportedDevices()");
+        #endif
+        supportedDevices = @[@"RP450",@"RP750",@"MOBY3000",@"MOBY8500"];
+    }
+}
+
+- (void)doSetDefaultDeviceType
+{
+    // set default device type to RUADeviceTypeRP750x unless a custom device was selected by setDeviceType
+    if ( !customDeviceSelected )
+    {
+        #ifdef DEBUG_MODE
+            NSLog(@"doSetDefaultDeviceType()");
+        #endif
+        [[Ingenico sharedInstance].PaymentDevice setDeviceType:RUADeviceTypeRP750x];
+    }
+}
+
 @end

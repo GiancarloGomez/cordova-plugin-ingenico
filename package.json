@@ -1,9 +1,13 @@
 {
   "name": "ingenico",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Ingenico mPOS 1.9.0.8 Cordova Plugin",
   "cordova": {
     "id": "cordova-plugin-ingenico"
   },
-  "author": "Eduardo Griffith <eduardo.griffith@logicstudio.net> and Giancarlo Gomez <ggomez@dutyfreeamericas.com>"
+  "author": "Eduardo Griffith <eduardo.griffith@logicstudio.net> and Giancarlo Gomez <ggomez@dutyfreeamericas.com>",
+  "devDependencies": {
+    "@angular/core": "^7.2.8",
+    "@ionic-native/core": "^5.2.0"
+  }
 }

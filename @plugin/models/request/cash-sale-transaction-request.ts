@@ -1,5 +1,5 @@
-import { Amount } from "../com.ingenico.mpos.sdk.data/amount";
-import { Product } from "../com.ingenico.mpos.sdk.data/product";
+import { Amount } from "../data/amount";
+import { Product } from "../data/product";
 
 export class CashSaleTransactionRequest {
     amount: Amount;

@@ -1,6 +1,6 @@
-import { EmvData } from "../com.ingenico.mpos.sdk.data/emv-data";
-import { TokenResponseParameters } from "../com.ingenico.mpos.sdk.data/token-response-parameters";
-import { Amount } from "../com.ingenico.mpos.sdk.data/amount";
+import { EmvData } from "../data/emv-data";
+import { TokenResponseParameters } from "../data/token-response-parameters";
+import { Amount } from "../data/amount";
 
 export class TransactionResponse {
     emvData: EmvData;

@@ -1,20 +1,15 @@
 # Ingenico Cordova + Ionic Native Plugin 1.0.0
 
-This plugin allows direct interactions with the native Ingenico mPOS SDK through JavaScript functions in your Ionic app. 
+This plugin allows direct interactions with the native Ingenico mPOS SDK through JavaScript functions in your Ionic app.
 This includes creating EMV, Swipe and Cash charges, among other features.
 
-## Ingenico mPOS SDK 1.9.0.8 not included
-Before installing this plugin into an Ionic Project you must download Ingenico's mPOS SDK version 1.9.0.8
-and save the ``IngenicoMposSdk.framework`` into the ``./src/ios/frameworks/`` folder. This file was too large
-to include in the repo and access is required by Ingenico, so it could not be included here.
-
 ## Installation
-All the necessary providers are included with this plugin. The Ionic Native Plugin and all required Model 
-files are installed to ``/src/providers/ingenico`` within your project so they can be easily 
+All the necessary providers are included with this plugin. The Ionic Native Plugin and all required Model
+files are installed to ``/src/providers/ingenico`` within your project so they can be easily
 referenced in the import statements.
 
 ### Install in Ionic Project
-It is recommended that you have a ``plugins_src`` folder in the Ionic Project you are installing to and 
+It is recommended that you have a ``plugins_src`` folder in the Ionic Project you are installing to and
 copy the contents of this repo into the following directory ``plugins_src/cordova-plugin-ingenico``. Once all
 files are copied run the following command to install in your project.
 
@@ -25,7 +20,7 @@ ionic cordova plugin add plugins_src/cordova-plugin-ingenico
 ### Add Native Plugin to src/app/app.module.ts
 
 ```javascript
-// import 
+// import
 import { Ingenico } from '../providers/ingenico';
 // add to @NgModule providers
 providers: [
@@ -96,31 +91,6 @@ _Checks if a Device is connected_
 ```javascript
 this.ingenico.isDeviceConnected()
     .then(result => {})
-    .catch(error => {});
-```
-
-#### onDeviceDisconnected()
-_Listener to add on a successful result from connect() or setupDevice()_
-
-```javascript
-// using connect
-this.ingenico.connect()
-    .then(result => {
-        // setup listener
-        this.ingenico.onDeviceDisconnected()
-            .then(result => {})
-            .catch(error => {});
-            })
-    .catch(error => {});
-
-// using setupDevice
-this.ingenico.setupDevice()
-    .then(result => {
-        // setup listener
-        this.ingenico.onDeviceDisconnected()
-            .then(result => {})
-            .catch(error => {});
-            })
     .catch(error => {});
 ```
 
@@ -196,26 +166,6 @@ _Processes a Debit Card transaction._
 
 ```javascript
 this.ingenico.processDebitSaleTransactionWithCardReader(DebitSaleTransactionRequest)
-    .then(result => {})
-    .catch(error => {});
-```
-
-### getReferenceForTransactionWithPendingSignature()
-_Checks if there is a Transaction pengin a signature upload_
-
-```javascript
-this.ingenico.getReferenceForTransactionWithPendingSignature()
-    .then(result => {
-        // execute uploadSignature()
-    })
-    .catch(error => {});
-```
-
-### uploadSignature(transactionReference,signatureImage)
-_Send a Base64 Image string (signatureImage) for a Transaction Pending Signature (transactionReference) which is returned from the getReferenceForTransactionWithPendingSignature() Method._
-
-```javascript
-this.ingenico.uploadSignature(transactionReference,signatureImage)
     .then(result => {})
     .catch(error => {});
 ```
