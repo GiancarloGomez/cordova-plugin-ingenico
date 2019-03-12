@@ -1,5 +1,5 @@
 export class Currency {
-    codeAlpha: string;
-    codeNumeric: number;
+    code: string;
+    iso: number;
     symbol: string;
 }

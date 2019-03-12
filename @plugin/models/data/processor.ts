@@ -1,5 +1,5 @@
 export class Processor {
-    name: string;
+    processorName: string;
     processorProfile: string;
     processorProfileLastModified: string;
 }

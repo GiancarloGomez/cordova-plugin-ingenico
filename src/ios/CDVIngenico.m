@@ -47,9 +47,11 @@ static long searchDuration       = 5000;
 - (void)sendPluginError:(NSString *)theCallbackID messageAsNSInteger:(NSInteger)theMessage keepCallbackAsBool:(BOOL)keepCallbackAsBool;
 - (void)sendPluginError:(NSString *)theCallbackID messageAsString:(NSString*)theMessage;
 // Authentication
+- (void)initialize:(CDVInvokedUrlCommand*)command;
 - (void)login:(CDVInvokedUrlCommand*)command;
 - (void)logoff:(CDVInvokedUrlCommand*)command;
 - (void)refreshUserSession:(CDVInvokedUrlCommand*)command;
+- (void)isInitialized:(CDVInvokedUrlCommand*)command;
 - (void)isLoggedIn:(CDVInvokedUrlCommand*)command;
 // Authentication Helpers
 - (void)doInitializeSDK;
@@ -57,6 +59,7 @@ static long searchDuration       = 5000;
 - (void)doReturnUserProfile:(NSString *)theCallbackID;
 // Device Information
 - (void)getBatteryLevel:(CDVInvokedUrlCommand*)command;
+- (void)getDeviceSerialNumber:(CDVInvokedUrlCommand*)command;
 - (void)getDeviceType:(CDVInvokedUrlCommand*)command;
 // Device Connection
 - (void)connect:(CDVInvokedUrlCommand*)command;
@@ -85,7 +88,7 @@ static long searchDuration       = 5000;
 - (void)processCreditSaleTransactionWithCardReader:(CDVInvokedUrlCommand*)command; // try/catch
 - (void)processDebitSaleTransactionWithCardReader:(CDVInvokedUrlCommand*)command;  // try/catch
 // Helpers
-- (bool)doCanExecute:(NSString *)theCallbackID;
+- (bool)doCanExecute:(NSString *)theCallbackID requiresLogin:(bool)loginRequired;
 - (void)doSetSupportedDevices;
 - (void)doSetDefaultDeviceType;
 @end
@@ -154,104 +157,126 @@ static long searchDuration       = 5000;
 }
 
 #pragma mark - Authentication
-
-- (void)login:(CDVInvokedUrlCommand*)command
+- (void)initialize:(CDVInvokedUrlCommand*)command
 {
     // initialize SDK
     if ( !isSDKInitialized )
     {
-        apiKey        = [command.arguments objectAtIndex:2];
-        baseURL       = [command.arguments objectAtIndex:3];
-        clientVersion = [command.arguments objectAtIndex:4];
+        #ifdef DEBUG_MODE
+            NSLog(@"initialize()");
+        #endif
+        apiKey        = [command.arguments objectAtIndex:0];
+        baseURL       = [command.arguments objectAtIndex:1];
+        clientVersion = [command.arguments objectAtIndex:2];
         [self doInitializeSDK];
     }
+    [self sendPluginResult:command.callbackId messageAsBool:isSDKInitialized];
+}
 
-    // if not logged in
-    if ( ![self doIsLoggedIn] )
+- (void)login:(CDVInvokedUrlCommand*)command
+{
+    if ( [self doCanExecute:command.callbackId requiresLogin:false] )
     {
-        #ifdef DEBUG_MODE
-            NSLog(@"login() -> authenticate");
-        #endif
-        NSString *uname = [command.arguments objectAtIndex:0];
-        NSString *pw    = [command.arguments objectAtIndex:1];
-        // login and validate user authenticity to use the application
-        [[[Ingenico sharedInstance] User] loginwithUsername:uname andPassword:pw onResponse:^(IMSUserProfile *user, NSError *error) {
-            if( !error ){
-                userProfile = user;
-                [self doReturnUserProfile:command.callbackId];
-            }
-            else
-            {
-                [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
-            }
-        }];
-    }
-    // return user profile
-    else
-    {
-        [self doReturnUserProfile:command.callbackId];
+        // if not logged in
+        if ( ![self doIsLoggedIn] )
+        {
+            #ifdef DEBUG_MODE
+                NSLog(@"login() -> authenticate");
+            #endif
+            NSString *uname = [command.arguments objectAtIndex:0];
+            NSString *pw    = [command.arguments objectAtIndex:1];
+            // login and validate user authenticity to use the application
+            [[[Ingenico sharedInstance] User] loginwithUsername:uname andPassword:pw onResponse:^(IMSUserProfile *user, NSError *error) {
+                if( !error ){
+                    userProfile = user;
+                    [self doReturnUserProfile:command.callbackId];
+                }
+                else
+                {
+                    if ( error.code == InvalidAPIKey )
+                        isSDKInitialized = false;
+                    [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
+                }
+            }];
+        }
+        // return user profile
+        else
+        {
+            [self doReturnUserProfile:command.callbackId];
+        }
     }
 }
 
 - (void)logoff:(CDVInvokedUrlCommand*)command
 {
-    // process logoff
-    if ( [self doIsLoggedIn] )
+    if ( [self doCanExecute:command.callbackId requiresLogin:false] )
     {
-        #ifdef DEBUG_MODE
-            NSLog(@"logoff()");
-        #endif
-        [[Ingenico sharedInstance].User logoff:^(NSError *error) {
-           if( !error )
-            {
-                bool deviceConnected = [[[Ingenico sharedInstance] PaymentDevice] isConnected];
-                #ifdef DEBUG_MODE
-                    NSLog(@"Device connected at logoff = %d",deviceConnected);
-                #endif
-                // disconnect device if one connected
-                if (deviceConnected)
-                    [[Ingenico sharedInstance].PaymentDevice releaseDevice:self];
-                [self sendPluginResult:command.callbackId messageAsBool:true];
-            }
-            else
-            {
-                [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
-            }
-            // reset userProfile
-            userProfile = nil;
-        }];
-    }
-    // return false if not logged in
-    else
-    {
-        [self sendPluginResult:command.callbackId messageAsBool:false];
+        // process logoff
+        if ( [self doIsLoggedIn] )
+        {
+            #ifdef DEBUG_MODE
+                NSLog(@"logoff()");
+            #endif
+            [[Ingenico sharedInstance].User logoff:^(NSError *error) {
+               if( !error )
+                {
+                    bool deviceConnected = [[[Ingenico sharedInstance] PaymentDevice] isConnected];
+                    #ifdef DEBUG_MODE
+                        NSLog(@"Device connected at logoff = %d",deviceConnected);
+                    #endif
+                    // disconnect device if one connected
+                    if (deviceConnected)
+                        [[Ingenico sharedInstance].PaymentDevice releaseDevice:self];
+                    [self sendPluginResult:command.callbackId messageAsBool:true];
+                }
+                else
+                {
+                    [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
+                }
+                // reset userProfile
+                userProfile = nil;
+            }];
+        }
+        // return false if not logged in
+        else
+        {
+            [self sendPluginResult:command.callbackId messageAsBool:false];
+        }
     }
 }
 
 - (void)refreshUserSession:(CDVInvokedUrlCommand*)command
 {
-    if ( [self doIsLoggedIn] )
+    if ( [self doCanExecute:command.callbackId requiresLogin:false] )
     {
-        #ifdef DEBUG_MODE
-            NSLog(@"refreshUserSession()");
-        #endif
-        [[Ingenico sharedInstance].User refreshUserSession:^(IMSUserProfile *user, NSError *error) {
-            if( !error )
-            {
-                userProfile = user;
-                [self doReturnUserProfile:command.callbackId];
-            }
-            else
-            {
-                [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
-            }
-        }];
+        if ( [self doIsLoggedIn] )
+        {
+            #ifdef DEBUG_MODE
+                NSLog(@"refreshUserSession()");
+            #endif
+            [[Ingenico sharedInstance].User refreshUserSession:^(IMSUserProfile *user, NSError *error) {
+                if( !error )
+                {
+                    userProfile = user;
+                    [self doReturnUserProfile:command.callbackId];
+                }
+                else
+                {
+                    [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
+                }
+            }];
+        }
+        // return false if not logged in
+        else
+        {
+            [self sendPluginResult:command.callbackId messageAsBool:false];
+        }
     }
-    // return false if not logged in
-    else
-    {
-        [self sendPluginResult:command.callbackId messageAsBool:false];
-    }
+}
+
+- (void)isInitialized:(CDVInvokedUrlCommand*)command
+{
+   [self sendPluginResult:command.callbackId messageAsBool:isSDKInitialized];
 }
 
 - (void)isLoggedIn:(CDVInvokedUrlCommand*)command
@@ -259,7 +284,8 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"isLoggedIn");
     #endif
-    [self sendPluginResult:command.callbackId messageAsBool:[self doIsLoggedIn]];
+    if ( [self doCanExecute:command.callbackId requiresLogin:false] )
+        [self sendPluginResult:command.callbackId messageAsBool:[self doIsLoggedIn]];
 }
 
 #pragma mark - Authentication Helpers
@@ -328,12 +354,15 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"getBatteryLevel()");
     #endif
-    [[Ingenico sharedInstance].PaymentDevice getDeviceBatteryLevel:^(NSInteger batteryLevel, NSError *error) {
-        if( !error )
-            [self sendPluginResult:command.callbackId messageAsNSInteger:batteryLevel];
-        else
-            [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
-    }];
+    if ( [self doCanExecute:command.callbackId requiresLogin:false] )
+    {
+        [[Ingenico sharedInstance].PaymentDevice getDeviceBatteryLevel:^(NSInteger batteryLevel, NSError *error) {
+            if( !error )
+                [self sendPluginResult:command.callbackId messageAsNSInteger:batteryLevel];
+            else
+                [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
+        }];
+    }
 }
 
 - (void)getDeviceType:(CDVInvokedUrlCommand*)command;
@@ -341,8 +370,24 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"getDeviceType()");
     #endif
-    RUADeviceType _deviceType = [[Ingenico sharedInstance].PaymentDevice getType];
-    [self sendPluginResult:command.callbackId messageAsNSInteger:_deviceType];
+    if ( [self doCanExecute:command.callbackId requiresLogin:false] )
+    {
+        RUADeviceType _deviceType = [[Ingenico sharedInstance].PaymentDevice getType];
+        [self sendPluginResult:command.callbackId messageAsNSInteger:_deviceType];
+    }
+}
+
+- (void)getDeviceSerialNumber:(CDVInvokedUrlCommand*)command;
+{
+    if ( [self doCanExecute:command.callbackId requiresLogin:false] )
+    {
+        [[Ingenico sharedInstance].PaymentDevice getDeviceSerialNumber:^(NSString *serialNumber, NSError *error) {
+            if( !error )
+                [self sendPluginResult:command.callbackId messageAsString:serialNumber];
+            else
+                [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
+        }];
+    }
 }
 
 #pragma mark - Device Connection
@@ -353,7 +398,7 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"connect()");
     #endif
-    if ([self doCanExecute:command.callbackId])
+    if ([self doCanExecute:command.callbackId requiresLogin:true])
     {
         isAutoConnectRequest = true;
         [self doSearchForDevice:command.callbackId];
@@ -366,8 +411,13 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"disconnect()");
     #endif
-    if ([[[Ingenico sharedInstance] PaymentDevice] isConnected])
-        [[Ingenico sharedInstance].PaymentDevice releaseDevice:self];
+    if ( [self doCanExecute:command.callbackId requiresLogin:true] )
+    {
+        bool deviceConnected = [[[Ingenico sharedInstance] PaymentDevice] isConnected];
+        if ( deviceConnected )
+            [[Ingenico sharedInstance].PaymentDevice releaseDevice:self];
+        [self sendPluginResult:command.callbackId messageAsBool:deviceConnected];
+    }
 }
 
 - (void)isDeviceConnected:(CDVInvokedUrlCommand*)command
@@ -375,8 +425,11 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"isDeviceConnected()");
     #endif
-    bool deviceConnected = [[[Ingenico sharedInstance] PaymentDevice] isConnected];
-    [self sendPluginResult:command.callbackId messageAsBool:deviceConnected];
+    if ( [self doCanExecute:command.callbackId requiresLogin:false] )
+    {
+        bool deviceConnected = [[[Ingenico sharedInstance] PaymentDevice] isConnected];
+        [self sendPluginResult:command.callbackId messageAsBool:deviceConnected];
+    }
 }
 
 #pragma mark - Connection Status Handlers
@@ -428,7 +481,7 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"setDeviceType()");
     #endif
-    if ([self doCanExecute:command.callbackId])
+    if ([self doCanExecute:command.callbackId requiresLogin:false])
     {
         NSString *deviceType = [command.arguments objectAtIndex:0];
         bool deviceSupported = false;
@@ -474,7 +527,7 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"selectDevice()");
     #endif
-    if ([self doCanExecute:command.callbackId])
+    if ([self doCanExecute:command.callbackId requiresLogin:true])
     {
         connectCallbackID       = command.callbackId;
         NSString *deviceJSON    = [command.arguments objectAtIndex:0];
@@ -555,7 +608,7 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"searchForDevice()");
     #endif
-    if ([self doCanExecute:command.callbackId])
+    if ([self doCanExecute:command.callbackId requiresLogin:false])
     {
         isAutoConnectRequest = false;
         [self doSearchForDevice:command.callbackId];
@@ -567,7 +620,7 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"stopSearchForDevice()");
     #endif
-    if ([self doCanExecute:command.callbackId])
+    if ([self doCanExecute:command.callbackId requiresLogin:false])
     {
         [self doStopSearch];
         [self sendPluginResult:command.callbackId messageAsBool:true];
@@ -680,7 +733,7 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"processCashTransaction()");
     #endif
-    if ([self doCanExecute:command.callbackId])
+    if ([self doCanExecute:command.callbackId requiresLogin:true])
     {
         @try
         {
@@ -727,7 +780,7 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"processCreditSaleTransactionWithCardReader()");
     #endif
-    if ([self doCanExecute:command.callbackId])
+    if ([self doCanExecute:command.callbackId requiresLogin:true])
     {
         @try
         {
@@ -779,7 +832,7 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"processDebitSaleTransactionWithCardReader()");
     #endif
-    if ([self doCanExecute:command.callbackId])
+    if ([self doCanExecute:command.callbackId requiresLogin:true])
     {
         @try
         {
@@ -828,15 +881,20 @@ static long searchDuration       = 5000;
 
 #pragma mark - Helpers
 
-- (bool)doCanExecute:(NSString *)theCallbackID
+- (bool)doCanExecute:(NSString *)theCallbackID requiresLogin:(bool)loginRequired
 {
+    bool canExecute = isSDKInitialized && (!loginRequired || userProfile);
     #ifdef DEBUG_MODE
-        NSLog(@"doCanExecute()");
+        NSLog(@"doCanExecute( %@ )",canExecute ? @"YES" : @"NO");
     #endif
-    bool canExecute = isSDKInitialized && userProfile;
     // send error if can not execute
     if ( !canExecute )
-        [self sendPluginError:theCallbackID messageAsString:@"Initialize SDK and Login"];
+    {
+        if ( loginRequired )
+            [self sendPluginError:theCallbackID messageAsString:@"Initialize SDK and Login"];
+        else
+            [self sendPluginError:theCallbackID messageAsNSInteger:4981];
+    }
     return canExecute;
 }
 

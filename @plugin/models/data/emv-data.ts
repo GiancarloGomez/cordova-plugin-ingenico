@@ -1,10 +1,10 @@
 import { EmvOfflineData } from "./emv-offline-data";
 
 export class EmvData {
-    appLabel?: any;
-    emvOfflineData: EmvOfflineData;
-    appPreferredName?: any;
-    pinStatement?: any;
-    cryptogramType?: any;
     appIdentifier?: any;
+    appPreferredName?: any;
+    appLabel?: any;
+    cryptogramType?: any;
+    pinStatement?: any;
+    emvOfflineData: EmvOfflineData;
 }

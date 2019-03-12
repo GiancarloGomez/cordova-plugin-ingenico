@@ -20,12 +20,17 @@ import {
 @Injectable()
 export class Ingenico {
 
-    /************************************* 
+    /*************************************
      * Authentication
     **************************************/
 
     @Cordova()
-    login(username: string, password: string, apiKey: string, baseUrl: string, clientVersion: string): Promise<UserProfile>{
+    initialize(apiKey: string, baseUrl: string, clientVersion: string): Promise<boolean> {
+        return;
+    }
+
+    @Cordova()
+    login(username: string, password: string): Promise<UserProfile>{
         return;
     }
 
@@ -40,11 +45,16 @@ export class Ingenico {
     }
 
     @Cordova()
+    isInitialized(): Promise<boolean> {
+        return;
+    }
+
+    @Cordova()
     isLoggedIn(): Promise<boolean>{
         return;
     }
-  
-    /************************************* 
+
+    /*************************************
      * Device Information
     **************************************/
 
@@ -57,8 +67,13 @@ export class Ingenico {
     getDeviceType(): Promise<number>{
         return;
     }
-  
-    /************************************* 
+
+    @Cordova()
+    getDeviceSerialNumber(): Promise<string> {
+        return;
+    }
+
+    /*************************************
      * Device Connection
     **************************************/
 
@@ -77,7 +92,7 @@ export class Ingenico {
         return ;
     }
 
-    /************************************* 
+    /*************************************
      * Device Setup
     **************************************/
 
@@ -91,7 +106,7 @@ export class Ingenico {
         return;
     }
 
-    /************************************* 
+    /*************************************
      * Device Search
     **************************************/
 
@@ -105,7 +120,7 @@ export class Ingenico {
         return;
     }
 
-    /************************************* 
+    /*************************************
      * Transactions
      **************************************/
 

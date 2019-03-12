@@ -11,5 +11,6 @@ export class UserInfo {
     primaryEmail: string;
     securityQuestions: any[];
     title?: any;
+    userName: string;
     workPhone: string;
 }

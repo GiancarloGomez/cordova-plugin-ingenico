@@ -4,11 +4,12 @@ import { Session } from "./session";
 import { UserInfo } from "./user-info";
 
 export class UserProfile {
-    chainId: string;
+    chainID: string;
     configuration: Configuration;
     processor: Processor;
     session: Session;
-    storeId: string;
-    terminalId: string;
+    storeID: string;
+    terminalID: string;
     userInfo: UserInfo;
+    version: string;
 }

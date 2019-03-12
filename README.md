@@ -56,11 +56,20 @@ They have been created to match the Ingenico mPOS SDK definitions.
 ## Methods
 All methods return a ``Promise``
 
+#### initialize()
+_Initialize Ingenico with API credentials (username, password and apiKey ), API Base URL and Client Version._
+
+```javascript
+this.ingenico.initialize(apiKey, baseUrl, clientVersion)
+    .then(result => {})
+    .catch(error => {});
+```
+
 #### login()
 _Initialize Ingenico with API credentials (username, password and apiKey ), API Base URL and Client Version._
 
 ```javascript
-this.ingenico.login(username, password, apiKey, baseUrl, clientVersion)
+this.ingenico.login(username, password)
     .then(result => {})
     .catch(error => {});
 ```

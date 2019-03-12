@@ -4,15 +4,22 @@ var exec         = require('cordova/exec'),
     _style       = 'color:darkorange;margin-left:16px;font-family:\'operator mono ssms\', monospace;';
 
 var Ingenico = {
-    /************************************* 
+    /*************************************
      * Authentication
     **************************************/
 
-    login : function(username, password, apiKey, baseUrl, clientVersion, success, error){
+    initialize: function (apiKey, baseUrl, clientVersion, success, error) {
+        if (_debug) { console.log('%cIngenico.js.initialize', _style); }
+        exec(function (param) {
+            success(Ingenico.isJSON(param) ? JSON.parse(param) : param);
+        }, error, plugin_name, 'initialize', [apiKey, baseUrl, clientVersion]);
+    },
+
+    login : function(username, password, success, error){
         if (_debug) { console.log('%cIngenico.js.login',_style); }
         exec(function(param){
             success(Ingenico.isJSON(param) ? JSON.parse(param) : param);
-        }, error, plugin_name, 'login', [username, password, apiKey, baseUrl, clientVersion]);
+        }, error, plugin_name, 'login', [username, password]);
     },
 
     logoff : function(success, error){
@@ -29,6 +36,13 @@ var Ingenico = {
         }, error, plugin_name, 'refreshUserSession', []);
     },
 
+    isInitialized: function (success, error) {
+        if (_debug) { console.log('%cIngenico.js.isInitialized', _style); }
+        exec(function (param) {
+            success(Ingenico.isJSON(param) ? JSON.parse(param) : param);
+        }, error, plugin_name, 'isInitialized', []);
+    },
+
     isLoggedIn : function(success, error){
         if (_debug) { console.log('%cIngenico.js.isLoggedIn',_style); }
         exec(function(param){
@@ -36,7 +50,7 @@ var Ingenico = {
         }, error, plugin_name, 'isLoggedIn', []);
     },
 
-    /************************************* 
+    /*************************************
      * Device Information
     **************************************/
 
@@ -53,8 +67,15 @@ var Ingenico = {
             success(param);
         }, error, plugin_name, 'getDeviceType', []);
     },
-    
-    /************************************* 
+
+    getDeviceSerialNumber: function (success, error) {
+        if (_debug) { console.log('%cIngenico.js.getDeviceSerialNumber', _style); }
+        exec(function (param) {
+            success(param);
+        }, error, plugin_name, 'getDeviceSerialNumber', []);
+    },
+
+    /*************************************
      * Device Connection
     **************************************/
 
@@ -74,8 +95,8 @@ var Ingenico = {
                 });
                 document.dispatchEvent(event);
             }
-            if (_debug) { 
-                console.log('%cIngenico.js.connect.response',_style,response); 
+            if (_debug) {
+                console.log('%cIngenico.js.connect.response',_style,response);
                 if (dispatchEvent)
                     console.log(`%c\tdispatchEvent => Ingenico:device:${response}`,_style);
             }
@@ -97,10 +118,10 @@ var Ingenico = {
         }, error, plugin_name, 'isDeviceConnected', []);
     },
 
-    /************************************* 
+    /*************************************
      * Device Setup
     **************************************/
-    
+
     setDeviceType : function(deviceType, success, error){
         if (_debug) { console.log('%cIngenico.js.setDeviceType',_style,deviceType); }
         exec(function(param){
@@ -123,8 +144,8 @@ var Ingenico = {
                 });
                 document.dispatchEvent(event);
             }
-            if (_debug) { 
-                console.log('%cIngenico.js.selectDevice.response',_style,response); 
+            if (_debug) {
+                console.log('%cIngenico.js.selectDevice.response',_style,response);
                 if (dispatchEvent)
                     console.log(`%c\tdispatchEvent => Ingenico:device:${response}`,_style);
             }
@@ -132,7 +153,7 @@ var Ingenico = {
         }, error, plugin_name, 'selectDevice', [ JSON.stringify(device) ]);
     },
 
-    /************************************* 
+    /*************************************
      * Device Search
     **************************************/
 
@@ -149,8 +170,8 @@ var Ingenico = {
            success(Ingenico.isJSON(param) ? JSON.parse(param) : param);
         }, error, plugin_name, 'stopSearchForDevice', []);
     },
-    
-    /************************************* 
+
+    /*************************************
      * Transactions
     **************************************/
 
@@ -177,8 +198,8 @@ var Ingenico = {
             success(Ingenico.isJSON(param) ? JSON.parse(param) : param);
         }, error, plugin_name, 'processDebitSaleTransactionWithCardReader', transaction);
     },
-    
-    /************************************* 
+
+    /*************************************
      * Helpers
     **************************************/
 
