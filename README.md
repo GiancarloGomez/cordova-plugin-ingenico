@@ -368,3 +368,11 @@ ionViewWillLeave(){
     document.removeEventListener('Ingenico:device:error',this.onDeviceErrorBound,false);
 }
 ```
+## Auto Connection Flow
+<img src="./connection-flow/auto-connect.png" width="1247" />
+
+## Manual Connection Step 1 Flow
+<img src="./connection-flow/manual-connect-step-1.png" width="440" />
+
+## Manual Connection Step 2 Flow
+<img src="./connection-flow/manual-connect-step-2.png" width="856" />
