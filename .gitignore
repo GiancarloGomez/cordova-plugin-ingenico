@@ -1,3 +1,4 @@
 IngenicoMposSdk.framework
 .DS_Store
 node_modules
+tsconfig.json
