@@ -1,4 +1,4 @@
-# Ingenico Cordova + Ionic Native Plugin 1.0.0
+# Ingenico Cordova + Ionic Native Plugin 1.1.0
 This plugin allows direct interactions with the native Ingenico mPOS SDK through JavaScript functions in your Ionic app. This includes creating EMV, Swipe and Cash charges, among other features.
 
 ## Ingenico mPOS SDK 1.9.0.8 not included
