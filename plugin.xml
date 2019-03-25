@@ -21,6 +21,7 @@
             </feature>
         </config-file>
 
+        <source-file src="src/ios/CDVIngenico.h" />
         <source-file src="src/ios/CDVIngenico.m" />
         <source-file src="src/ios/DeviceManagementHelper.h" />
         <source-file src="src/ios/DeviceManagementHelper.m" />

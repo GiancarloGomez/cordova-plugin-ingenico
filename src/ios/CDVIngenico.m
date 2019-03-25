@@ -1,13 +1,5 @@
-/**
- * CDVIngenico.m Cordova Plugin Implementation
- */
-
-#import "CollectionFactory.h"
-#import "DeviceManagementHelper.h"
+#import "CDVIngenico.h"
 #import <Cordova/CDV.h>
-#import <IngenicoMposSdk/Ingenico.h>
-#import <AVFoundation/AVFoundation.h>
-#import <LocalAuthentication/LocalAuthentication.h>
 
 // used to track is SDK has been initialized
 static bool isSDKInitialized     = false;
@@ -21,77 +13,6 @@ static bool isAutoConnectRequest = false;
 static bool customDeviceSelected = false;
 // when searching for a device this is how long we will search before timing out ( ms )
 static long searchDuration       = 5000;
-
-@interface CDVIngenico : CDVPlugin <RUADeviceSearchListener,RUAReleaseHandler,RUADeviceStatusHandler>{
-    // used to initialize SDK
-    NSString *apiKey;
-    NSString *baseURL;
-    NSString *clientVersion;
-    // set by doSearchDevice ( auto connect and manual search prior to select )
-    // and selectDevice ( manual selection )
-    NSString *connectCallbackID;
-    // stores list of available devices
-    NSMutableArray *deviceList;
-    // stores the supported devices
-    NSArray *supportedDevices;
-    // stores saved user profile from a login or refresh
-    IMSUserProfile *userProfile;
-}
-// Cordova Communication
-- (void)sendPluginResult:(NSString *)theCallbackID messageAsString:(NSString*)theMessage;
-- (void)sendPluginResult:(NSString *)theCallbackID messageAsString:(NSString*)theMessage keepCallbackAsBool:(BOOL)keepCallbackAsBool;
-- (void)sendPluginResult:(NSString *)theCallbackID messageAsBool:(BOOL)theMessage;
-- (void)sendPluginResult:(NSString *)theCallbackID messageAsBool:(BOOL)theMessage keepCallbackAsBool:(BOOL)keepCallbackAsBool;
-- (void)sendPluginResult:(NSString *)theCallbackID messageAsNSInteger:(NSInteger)theMessage;
-- (void)sendPluginError:(NSString *)theCallbackID messageAsNSInteger:(NSInteger)theMessage;
-- (void)sendPluginError:(NSString *)theCallbackID messageAsNSInteger:(NSInteger)theMessage keepCallbackAsBool:(BOOL)keepCallbackAsBool;
-- (void)sendPluginError:(NSString *)theCallbackID messageAsString:(NSString*)theMessage;
-// Authentication
-- (void)initialize:(CDVInvokedUrlCommand*)command;
-- (void)login:(CDVInvokedUrlCommand*)command;
-- (void)logoff:(CDVInvokedUrlCommand*)command;
-- (void)refreshUserSession:(CDVInvokedUrlCommand*)command;
-- (void)isInitialized:(CDVInvokedUrlCommand*)command;
-- (void)isLoggedIn:(CDVInvokedUrlCommand*)command;
-// Authentication Helpers
-- (void)doInitializeSDK;
-- (bool)doIsLoggedIn;
-- (void)doReturnUserProfile:(NSString *)theCallbackID;
-// Device Information
-- (void)getBatteryLevel:(CDVInvokedUrlCommand*)command;
-- (void)getDeviceSerialNumber:(CDVInvokedUrlCommand*)command;
-- (void)getDeviceType:(CDVInvokedUrlCommand*)command;
-// Device Connection
-- (void)connect:(CDVInvokedUrlCommand*)command;
-- (void)disconnect:(CDVInvokedUrlCommand*)command;
-- (void)isDeviceConnected:(CDVInvokedUrlCommand*)command;
-// Connection Status Handlers
-- (void)onConnected;
-- (void)onDisconnected;
-- (void)onError:(NSString *)message;
-// Device Setup
-- (void)setDeviceType:(CDVInvokedUrlCommand*)command;
-- (void)selectDevice:(CDVInvokedUrlCommand*)command;
-// Device Setup Helpers
-- (void)doSetupDevice;
-// Device Search
-- (void)searchForDevice:(CDVInvokedUrlCommand*)command;
-- (void)stopSearchForDevice:(CDVInvokedUrlCommand*)command;
-// Device Search Helpers
-- (void)doSearchForDevice:(NSString *)theCallbackID; // try/catch
-- (void)doStopSearch;
-// Search Listeners
-- (void)discoveredDevice:(RUADevice *)reader;
-- (void)discoveryComplete;
-// Transactions
-- (void)processCashTransaction:(CDVInvokedUrlCommand*)command; // try/catch
-- (void)processCreditSaleTransactionWithCardReader:(CDVInvokedUrlCommand*)command; // try/catch
-- (void)processDebitSaleTransactionWithCardReader:(CDVInvokedUrlCommand*)command;  // try/catch
-// Helpers
-- (bool)doCanExecute:(NSString *)theCallbackID requiresLogin:(bool)loginRequired;
-- (void)doSetSupportedDevices;
-- (void)doSetDefaultDeviceType;
-@end
 
 @implementation CDVIngenico
 
@@ -188,7 +109,7 @@ static long searchDuration       = 5000;
             // login and validate user authenticity to use the application
             [[[Ingenico sharedInstance] User] loginwithUsername:uname andPassword:pw onResponse:^(IMSUserProfile *user, NSError *error) {
                 if( !error ){
-                    userProfile = user;
+                    self->userProfile = user;
                     [self doReturnUserProfile:command.callbackId];
                 }
                 else
@@ -234,7 +155,7 @@ static long searchDuration       = 5000;
                     [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
                 }
                 // reset userProfile
-                userProfile = nil;
+                self->userProfile = nil;
             }];
         }
         // return false if not logged in
@@ -257,7 +178,7 @@ static long searchDuration       = 5000;
             [[Ingenico sharedInstance].User refreshUserSession:^(IMSUserProfile *user, NSError *error) {
                 if( !error )
                 {
-                    userProfile = user;
+                    self->userProfile = user;
                     [self doReturnUserProfile:command.callbackId];
                 }
                 else
@@ -569,7 +490,7 @@ static long searchDuration       = 5000;
                 [[Ingenico sharedInstance].PaymentDevice setup:^(NSError *error) {
                     if( !error )
                     {
-                        [self sendPluginResult:connectCallbackID messageAsString:@"ready" keepCallbackAsBool:true];
+                        [self sendPluginResult:self->connectCallbackID messageAsString:@"ready" keepCallbackAsBool:true];
                     }
                     else
                     {
@@ -577,7 +498,7 @@ static long searchDuration       = 5000;
                         #ifdef DEBUG_MODE
                             NSLog(@"doSetupDevice()->Error-> %ld : %@",(long)error.code,error.description);
                         #endif
-                        [self sendPluginResult:connectCallbackID messageAsString:_err keepCallbackAsBool:false];
+                        [self sendPluginResult:self->connectCallbackID messageAsString:_err keepCallbackAsBool:false];
 
                     }
                 }];
@@ -587,7 +508,7 @@ static long searchDuration       = 5000;
                 #ifdef DEBUG_MODE
                     NSLog(@"=> SetupNotRequired");
                 #endif
-                [self sendPluginResult:connectCallbackID messageAsString:@"ready" keepCallbackAsBool:true];
+                [self sendPluginResult:self->connectCallbackID messageAsString:@"ready" keepCallbackAsBool:true];
             }
         }
         else
@@ -596,7 +517,7 @@ static long searchDuration       = 5000;
             #ifdef DEBUG_MODE
                 NSLog(@"doSetupDevice()->Error-> %ld : %@",(long)error.code,error.description);
             #endif
-            [self sendPluginResult:connectCallbackID messageAsString:_err keepCallbackAsBool:false];
+            [self sendPluginResult:self->connectCallbackID messageAsString:_err keepCallbackAsBool:false];
         }
     }];
 }
