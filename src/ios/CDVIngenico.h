@@ -45,19 +45,18 @@
 - (void)getBatteryLevel:(CDVInvokedUrlCommand *)command;
 - (void)getDeviceSerialNumber:(CDVInvokedUrlCommand *)command;
 - (void)getDeviceType:(CDVInvokedUrlCommand *)command;
-// Device Connection
+// Device Connection and Setup
 - (void)connect:(CDVInvokedUrlCommand *)command;
 - (void)disconnect:(CDVInvokedUrlCommand *)command;
 - (void)isDeviceConnected:(CDVInvokedUrlCommand *)command;
+- (void)selectDevice:(CDVInvokedUrlCommand *)command;
+- (void)setDeviceType:(CDVInvokedUrlCommand *)command;
+- (void)setupDevice:(CDVInvokedUrlCommand *)command;
+- (void)configureIdleShutdownTimeout:(CDVInvokedUrlCommand *)command;
 // Connection Status Handlers
 - (void)onConnected;
 - (void)onDisconnected;
 - (void)onError:(NSString *)message;
-// Device Setup
-- (void)setDeviceType:(CDVInvokedUrlCommand *)command;
-- (void)selectDevice:(CDVInvokedUrlCommand *)command;
-// Device Setup Helpers
-- (void)doSetupDevice;
 // Device Search
 - (void)searchForDevice:(CDVInvokedUrlCommand *)command;
 - (void)stopSearchForDevice:(CDVInvokedUrlCommand *)command;

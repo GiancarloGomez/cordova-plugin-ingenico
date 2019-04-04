@@ -76,10 +76,9 @@ var Ingenico = {
     },
 
     /*************************************
-     * Device Connection
-    **************************************/
+     * Device Connection and Setup
+     **************************************/
 
-    // search + auto connect
     connect : function(success, error){
         if (_debug) { console.log('%cIngenico.js.connect',_style); }
         exec(function(param){
@@ -118,9 +117,29 @@ var Ingenico = {
         }, error, plugin_name, 'isDeviceConnected', []);
     },
 
-    /*************************************
-     * Device Setup
-    **************************************/
+    selectDevice: function (device, success, error) {
+        if (_debug) { console.log('%cIngenico.js.selectDevice', _style, device); }
+        exec(function (param) {
+            let response = Ingenico.isJSON(param) ? JSON.parse(param) : param,
+                dispatchEvent = typeof response !== 'boolean',
+                eventResponse = '',
+                event;
+            // due to continous callbacks we send custom events
+            if (dispatchEvent) {
+                eventResponse = response.split(':');
+                event = new CustomEvent(`Ingenico:device:${eventResponse[0]}`, {
+                    detail: eventResponse.length > 1 ? eventResponse[1] : ''
+                });
+                document.dispatchEvent(event);
+            }
+            if (_debug) {
+                console.log('%cIngenico.js.selectDevice.response', _style, response);
+                if (dispatchEvent)
+                    console.log(`%c\tdispatchEvent => Ingenico:device:${response}`, _style);
+            }
+            success(typeof response === 'boolean' ? response : true);
+        }, error, plugin_name, 'selectDevice', [JSON.stringify(device)]);
+    },
 
     setDeviceType : function(deviceType, success, error){
         if (_debug) { console.log('%cIngenico.js.setDeviceType',_style,deviceType); }
@@ -129,28 +148,18 @@ var Ingenico = {
         }, error, plugin_name, 'setDeviceType', [ deviceType ]);
     },
 
-    selectDevice : function(device, success, error){
-        if (_debug) { console.log('%cIngenico.js.selectDevice',_style,device); }
-        exec(function(param){
-            let response = Ingenico.isJSON(param) ? JSON.parse(param) : param,
-                dispatchEvent = typeof response !== 'boolean',
-                eventResponse = '',
-                event;
-            // due to continous callbacks we send custom events
-            if (dispatchEvent){
-                eventResponse = response.split(':');
-                event = new CustomEvent(`Ingenico:device:${eventResponse[0]}`,{
-                    detail : eventResponse.length > 1 ? eventResponse[1] : ''
-                });
-                document.dispatchEvent(event);
-            }
-            if (_debug) {
-                console.log('%cIngenico.js.selectDevice.response',_style,response);
-                if (dispatchEvent)
-                    console.log(`%c\tdispatchEvent => Ingenico:device:${response}`,_style);
-            }
-           success(typeof response === 'boolean' ? response : true);
-        }, error, plugin_name, 'selectDevice', [ JSON.stringify(device) ]);
+    setupDevice: function (success, error) {
+        if (_debug) { console.log('%cIngenico.js.setupDevice', _style); }
+        exec(function (param) {
+            success(Ingenico.isJSON(param) ? JSON.parse(param) : param);
+        }, error, plugin_name, 'setupDevice', []);
+    },
+
+    configureIdleShutdownTimeout: function (timeoutInSeconds, success, error) {
+        if (_debug) { console.log('%cIngenico.js.configureIdleShutdownTimeout', _style, timeoutInSeconds); }
+        exec(function (param) {
+            success(Ingenico.isJSON(param) ? JSON.parse(param) : param);
+        }, error, plugin_name, 'configureIdleShutdownTimeout', [timeoutInSeconds]);
     },
 
     /*************************************

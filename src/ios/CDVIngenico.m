@@ -311,15 +311,16 @@ static long searchDuration       = 5000;
     }
 }
 
-#pragma mark - Device Connection
+#pragma mark - Device Connection and Setup
 
-// search -> setup ( auto connect to first valid device found )
+// search -> select and initialize
+// auto selects and initializes first valid device found
 - (void)connect:(CDVInvokedUrlCommand*)command
 {
     #ifdef DEBUG_MODE
         NSLog(@"connect()");
     #endif
-    if ([self doCanExecute:command.callbackId requiresLogin:true])
+    if ([self doCanExecute:command.callbackId requiresLogin:false])
     {
         isAutoConnectRequest = true;
         [self doSearchForDevice:command.callbackId];
@@ -332,7 +333,7 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"disconnect()");
     #endif
-    if ( [self doCanExecute:command.callbackId requiresLogin:true] )
+    if ( [self doCanExecute:command.callbackId requiresLogin:false] )
     {
         bool deviceConnected = [[[Ingenico sharedInstance] PaymentDevice] isConnected];
         if ( deviceConnected )
@@ -353,49 +354,32 @@ static long searchDuration       = 5000;
     }
 }
 
-#pragma mark - Connection Status Handlers
-
-// Invoked when the reader is connected
-- (void)onConnected
+// select and initialize a device
+// passed in from a search result
+- (void)selectDevice:(CDVInvokedUrlCommand*)command
 {
     #ifdef DEBUG_MODE
-        NSLog(@"onConnected()");
+        NSLog(@"selectDevice()");
     #endif
-    [self doSetupDevice];
-    [self sendPluginResult:connectCallbackID messageAsString:@"connected" keepCallbackAsBool:true];
+    if ([self doCanExecute:command.callbackId requiresLogin:false])
+    {
+        connectCallbackID       = command.callbackId;
+        NSString *deviceJSON    = [command.arguments objectAtIndex:0];
+        RUADevice *deviceIn     = [RUADevice objectWithJSONString:deviceJSON];
+        bool deviceSeleted      = false;
+        for( RUADevice *device in deviceList )
+        {
+            if( [device.identifier isEqualToString:deviceIn.identifier] )
+            {
+                [[Ingenico sharedInstance].PaymentDevice select:device];
+                [[Ingenico sharedInstance].PaymentDevice initialize:self];
+                deviceSeleted = true;
+                break;
+            }
+        }
+        [self sendPluginResult:connectCallbackID messageAsBool:deviceSeleted keepCallbackAsBool:deviceSeleted];
+    }
 }
-
-// Invoked when the reader is disconnected
-- (void)onDisconnected
-{
-    #ifdef DEBUG_MODE
-        NSLog(@"onDisconnected()");
-    #endif
-    [self sendPluginResult:connectCallbackID messageAsString:@"disconnected" keepCallbackAsBool:false];
-}
-
-// Invoked when the reader returns an error while connecting
-- (void)onError:(NSString *)message
-{
-    #ifdef DEBUG_MODE
-        NSLog(@"onError() -> %@",message);
-    #endif
-    [self doSearchForDevice:connectCallbackID];
-}
-
-// Invoked when a device manager releases all the resources it acquired ( manual disconnect )
-// This requires an SDK reinit and login
-- (void)done
-{
-    #ifdef DEBUG_MODE
-        NSLog(@"done()");
-    #endif
-    userProfile = nil;
-    isSDKInitialized = false;
-    [self doInitializeSDK];
-}
-
-#pragma mark - Device Setup
 
 - (void)setDeviceType:(CDVInvokedUrlCommand*)command
 {
@@ -442,35 +426,8 @@ static long searchDuration       = 5000;
     }
 }
 
-// initialize + setup
-- (void)selectDevice:(CDVInvokedUrlCommand*)command
-{
-    #ifdef DEBUG_MODE
-        NSLog(@"selectDevice()");
-    #endif
-    if ([self doCanExecute:command.callbackId requiresLogin:true])
-    {
-        connectCallbackID       = command.callbackId;
-        NSString *deviceJSON    = [command.arguments objectAtIndex:0];
-        RUADevice *deviceIn     = [RUADevice objectWithJSONString:deviceJSON];
-        bool deviceSeleted      = false;
-        for( RUADevice *device in deviceList )
-        {
-            if( [device.identifier isEqualToString:deviceIn.identifier] )
-            {
-                [[Ingenico sharedInstance].PaymentDevice select:device];
-                [[Ingenico sharedInstance].PaymentDevice initialize:self];
-                deviceSeleted = true;
-                break;
-            }
-        }
-        [self sendPluginResult:connectCallbackID messageAsBool:deviceSeleted keepCallbackAsBool:deviceSeleted];
-    }
-}
-
-#pragma mark - Device Setup Helpers
-
-- (void)doSetupDevice
+// setup the selected and initialized device
+- (void)setupDevice:(CDVInvokedUrlCommand*)command
 {
     #ifdef DEBUG_MODE
         NSLog(@"doSetupDevice()");
@@ -490,16 +447,14 @@ static long searchDuration       = 5000;
                 [[Ingenico sharedInstance].PaymentDevice setup:^(NSError *error) {
                     if( !error )
                     {
-                        [self sendPluginResult:self->connectCallbackID messageAsString:@"ready" keepCallbackAsBool:true];
+                        [self sendPluginResult:command.callbackId messageAsString:@"ready"];
                     }
                     else
                     {
-                        NSString *_err = [NSString stringWithFormat:@"error:%ld",(long)error.code];
                         #ifdef DEBUG_MODE
                             NSLog(@"doSetupDevice()->Error-> %ld : %@",(long)error.code,error.description);
                         #endif
-                        [self sendPluginResult:self->connectCallbackID messageAsString:_err keepCallbackAsBool:false];
-
+                        [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
                     }
                 }];
             }
@@ -508,18 +463,82 @@ static long searchDuration       = 5000;
                 #ifdef DEBUG_MODE
                     NSLog(@"=> SetupNotRequired");
                 #endif
-                [self sendPluginResult:self->connectCallbackID messageAsString:@"ready" keepCallbackAsBool:true];
+                [self sendPluginResult:command.callbackId messageAsString:@"ready"];
             }
         }
         else
         {
-            NSString *_err = [NSString stringWithFormat:@"error:%ld",(long)error.code];
             #ifdef DEBUG_MODE
                 NSLog(@"doSetupDevice()->Error-> %ld : %@",(long)error.code,error.description);
             #endif
-            [self sendPluginResult:self->connectCallbackID messageAsString:_err keepCallbackAsBool:false];
+            [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
         }
     }];
+}
+
+- (void)configureIdleShutdownTimeout:(CDVInvokedUrlCommand *)command
+{
+    if ([self doCanExecute:command.callbackId requiresLogin:false])
+    {
+        NSNumber *timeoutInSeconds = [command.arguments objectAtIndex:0];
+        int timeoutInSecondsInt = [timeoutInSeconds intValue];
+
+        #ifdef DEBUG_MODE
+                NSLog(@"configureIdleShutdownTimeout(%@)",timeoutInSeconds);
+        #endif
+
+        [[[Ingenico sharedInstance] PaymentDevice] configureIdleShutdownTimeout:timeoutInSecondsInt andOnDone:^(NSError * _Nullable error) {
+            if( !error )
+            {
+                [self sendPluginResult:command.callbackId messageAsBool:true];
+            }
+            else
+            {
+                [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
+            }
+        }];
+    }
+}
+
+#pragma mark - Connection Status Handlers
+
+// Invoked when the reader is connected
+- (void)onConnected
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"onConnected()");
+    #endif
+    [self sendPluginResult:self->connectCallbackID messageAsString:@"connected" keepCallbackAsBool:true];
+}
+
+// Invoked when the reader is disconnected
+- (void)onDisconnected
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"onDisconnected()");
+    #endif
+    [self sendPluginResult:self->connectCallbackID messageAsString:@"disconnected" keepCallbackAsBool:false];
+}
+
+// Invoked when the reader returns an error while connecting
+- (void)onError:(NSString *)message
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"onError() -> %@",message);
+    #endif
+    [self doSearchForDevice:connectCallbackID];
+}
+
+// Invoked when a device manager releases all the resources it acquired ( manual disconnect )
+// This requires an SDK reinit and login
+- (void)done
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"done()");
+    #endif
+    userProfile = nil;
+    isSDKInitialized = false;
+    [self doInitializeSDK];
 }
 
 #pragma mark - Device Search

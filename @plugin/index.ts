@@ -74,7 +74,7 @@ export class Ingenico {
     }
 
     /*************************************
-     * Device Connection
+     * Device Connection and Setup
     **************************************/
 
     @Cordova()
@@ -92,9 +92,10 @@ export class Ingenico {
         return ;
     }
 
-    /*************************************
-     * Device Setup
-    **************************************/
+    @Cordova()
+    selectDevice(device: Device): Promise<boolean> {
+        return;
+    }
 
     @Cordova()
     setDeviceType(deviceType: any): Promise<boolean>{
@@ -102,7 +103,12 @@ export class Ingenico {
     }
 
     @Cordova()
-    selectDevice(device: Device): Promise<boolean>{
+    setupDevice(): Promise<boolean> {
+        return;
+    }
+
+    @Cordova()
+    configureIdleShutdownTimeout(timeoutInSeconds: Number): Promise<boolean> {
         return;
     }
 
