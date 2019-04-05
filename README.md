@@ -1,4 +1,4 @@
-# Ingenico Cordova + Ionic Native Plugin 1.1.0
+# Ingenico Cordova + Ionic Native Plugin 1.2.0
 This plugin allows direct interactions with the native Ingenico mPOS SDK through JavaScript functions in your Ionic app. This includes creating EMV, Swipe and Cash charges, among other features.
 
 ## Ingenico mPOS SDK 1.9.0.8 not included
@@ -176,10 +176,10 @@ this.ingenico.getDeviceSerialNumber()
     .catch(error => {});
 ```
 
-### Device Connection Methods
+### Device Connection and Setup Methods
 
 #### connect()
-_Searches for an available device and automatically connects. This method receives statuses during the entire setup process which can be tracked by listening for dispatched events. This is discussed in [Connection Event Listeners](#connection-event-listeners)._
+_Searches for an available device and automatically selects and initializes the first  device found. This method receives statuses during the entire connection process which can be tracked by listening for dispatched events. This is discussed in [Connection Event Listeners](#connection-event-listeners)._
 
 ```javascript
 // Cordova
@@ -217,7 +217,18 @@ this.ingenico.isDeviceConnected()
     .catch(error => {});
 ```
 
-### Device Setup Methods
+#### selectDevice(Device)
+_Selects and initializes a Device from available Devices returned from a manual search.This method receives statuses during the entire connection process which can be tracked by listening for dispatched events. This is discussed in [Connection Event Listeners](#connection-event-listeners)._
+
+```javascript
+// Cordova
+Ingenico.selectDevice(Device,success, error);
+
+// Ionic
+this.ingenico.selectDevice(Device)
+    .then(result => {})
+    .catch(error => {});
+```
 
 #### setDeviceType(DeviceType)
 _Set the Device Type for the app to use. The application sets the device to `RUADeviceTypeRP750x` and this method allows you to overwrite it to any of the [Supported Devices](#supported-devices)._
@@ -232,15 +243,28 @@ this.ingenico.setDeviceType(DeviceType)
     .catch(error => {});
 ```
 
-#### selectDevice(Device)
-_Sets the selected Device from available Devices ( in manual mode ) and connects the device for use.This method receives statuses during the entire setup process which can be tracked by listening for dispatched events. This is discussed in [Connection Event Listeners](#connection-event-listeners)._
+#### setupDevice()
+_Finalizes setup of a selected and intialized device from either ``connect()``_or ``selectDevice()``. Please note this also requires that you are logged in to the API._
 
 ```javascript
 // Cordova
-Ingenico.selectDevice(Device,success, error);
+Ingenico.setupDevice(success, error);
 
 // Ionic
-this.ingenico.selectDevice(Device)
+this.ingenico.setupDevice(DeviceType)
+    .then(result => {})
+    .catch(error => {});
+```
+
+#### configureIdleShutdownTimeout(timeoutInSeconds)
+_Configure the duration that the device remains active before shutting down. Timeout is assigned in seconds within the range of 180 - 1800._
+
+```javascript
+// Cordova
+Ingenico.configureIdleShutdownTimeout(timeoutInSeconds,success, error);
+
+// Ionic
+this.ingenico.configureIdleShutdownTimeout(timeoutInSeconds)
     .then(result => {})
     .catch(error => {});
 ```
@@ -321,13 +345,11 @@ During the auto connect or select device process you can listen for custom dispa
 * __Ingenico.device.selected__<br />
 This event is dispatched when a device is selected. At this point the SDK starts the connection process.
 * __Ingenico.device.connected__<br />
-This event is dispatched when a device is succesfully connected. At this point the SDK starts the setup process.
-* __Ingenico.device.ready__<br />
-This event is dispatched when a device is ready for use.
+This event is dispatched when a device is succesfully connected.
 * __Ingenico.device.disconnected__<br />
 This event is dispatched when a device is disconnected manually or automatically due to the device going to sleep or loosing power.
 * __Ingenico.device.error__<br />
-This event is dispatched when an error occurs during the device setup process. When this event is received the error code or message is included in the detail object of the event.
+This event is dispatched when an error occurs during the device connection process. When this event is received the error code or message is included in the detail object of the event.
 
 Make sure to register listeners and unregister for these listeners properly. Below are examples of how to do this in Ionic.
 
@@ -346,15 +368,12 @@ ionViewWillEnter(){
         this.onDeviceSelectedBound = this.onDeviceSelected.bind(this);
     if (!this.onDeviceConnectedBound)
         this.onDeviceConnectedBound = this.onDeviceConnected.bind(this);
-    if (!this.onDeviceReadyBound)
-        this.onDeviceReadyBound = this.onDeviceReady.bind(this);
     if (!this.onDeviceDisconnectedBound)
         this.onDeviceDisconnectedBound = this.onDeviceDisconnected.bind(this);
     if (!this.onDeviceErrorBound)
         this.onDeviceErrorBound = this.onDeviceError.bind(this);
     document.addEventListener('Ingenico:device:selected',this.onDeviceSelectedBound,false);
     document.addEventListener('Ingenico:device:connected',this.onDeviceConnectedBound,false);
-    document.addEventListener('Ingenico:device:ready',this.onDeviceReadyBound,false);
     document.addEventListener('Ingenico:device:disconnected',this.onDeviceDisconnectedBound,false);
     document.addEventListener('Ingenico:device:error',this.onDeviceErrorBound,false);
 }
@@ -363,7 +382,6 @@ ionViewWillLeave(){
      // remove custom event listeners
     document.removeEventListener('Ingenico:device:selected',this.onDeviceSelectedBound,false);
     document.removeEventListener('Ingenico:device:connected',this.onDeviceConnectedBound,false);
-    document.removeEventListener('Ingenico:device:ready',this.onDeviceReadyBound,false);
     document.removeEventListener('Ingenico:device:disconnected',this.onDeviceDisconnectedBound,false);
     document.removeEventListener('Ingenico:device:error',this.onDeviceErrorBound,false);
 }

@@ -77,7 +77,7 @@ var Ingenico = {
 
     /*************************************
      * Device Connection and Setup
-     **************************************/
+    **************************************/
 
     connect : function(success, error){
         if (_debug) { console.log('%cIngenico.js.connect',_style); }

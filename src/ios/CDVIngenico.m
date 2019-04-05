@@ -377,7 +377,7 @@ static long searchDuration       = 5000;
                 break;
             }
         }
-        [self sendPluginResult:connectCallbackID messageAsBool:deviceSeleted keepCallbackAsBool:deviceSeleted];
+        [self sendPluginResult:self->connectCallbackID messageAsBool:deviceSeleted keepCallbackAsBool:deviceSeleted];
     }
 }
 
@@ -526,7 +526,7 @@ static long searchDuration       = 5000;
     #ifdef DEBUG_MODE
         NSLog(@"onError() -> %@",message);
     #endif
-    [self doSearchForDevice:connectCallbackID];
+    [self doSearchForDevice:self->connectCallbackID];
 }
 
 // Invoked when a device manager releases all the resources it acquired ( manual disconnect )
@@ -649,11 +649,11 @@ static long searchDuration       = 5000;
             RUADevice *device = deviceList[0];
             [[Ingenico sharedInstance].PaymentDevice select:device];
             [[Ingenico sharedInstance].PaymentDevice initialize:self];
-            [self sendPluginResult:connectCallbackID messageAsString:@"selected" keepCallbackAsBool:true];
+            [self sendPluginResult:self->connectCallbackID messageAsString:@"selected" keepCallbackAsBool:true];
         }
         else
         {
-            [self sendPluginResult:connectCallbackID messageAsBool:false keepCallbackAsBool:false];
+            [self sendPluginResult:self->connectCallbackID messageAsBool:false keepCallbackAsBool:false];
         }
     }
     else
@@ -662,7 +662,7 @@ static long searchDuration       = 5000;
             NSLog(@"discoveryComplete() => Manual Lookup");
         #endif
         NSString *JSONResponse = [deviceList JSONString];
-        [self sendPluginResult:connectCallbackID messageAsString:JSONResponse keepCallbackAsBool:false];
+        [self sendPluginResult:self->connectCallbackID messageAsString:JSONResponse keepCallbackAsBool:false];
     }
 }
 
