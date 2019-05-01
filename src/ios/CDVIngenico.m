@@ -106,6 +106,11 @@ static long searchDuration       = 5000;
             #endif
             NSString *uname = [command.arguments objectAtIndex:0];
             NSString *pw    = [command.arguments objectAtIndex:1];
+            // fix if what we received is a number in username or password
+            if ([uname isKindOfClass:[NSNumber class]])
+                uname = [NSString stringWithFormat:@"%@", uname];
+            if ([pw isKindOfClass:[NSNumber class]])
+                pw = [NSString stringWithFormat:@"%@", pw];
             // login and validate user authenticity to use the application
             [[[Ingenico sharedInstance] User] loginwithUsername:uname andPassword:pw onResponse:^(IMSUserProfile *user, NSError *error) {
                 if( !error ){
