@@ -208,6 +208,13 @@ var Ingenico = {
         }, error, plugin_name, 'processDebitSaleTransactionWithCardReader', transaction);
     },
 
+    processVoidTransaction : function(originalSaleTransactionID, success, error){
+         if (_debug) { console.log('%cIngenico.js.processVoidTransaction',_style,originalSaleTransactionID); }
+         exec(function(param){
+             success(Ingenico.isJSON(param) ? JSON.parse(param) : param);
+         }, error, plugin_name, 'processVoidTransaction', [originalSaleTransactionID]);
+    },
+
     /*************************************
      * Helpers
     **************************************/

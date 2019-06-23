@@ -144,4 +144,9 @@ export class Ingenico {
     processDebitSaleTransactionWithCardReader(debitSaleTransaction: DebitSaleTransactionRequest): Promise<TransactionResponse>{
         return;
     }
+
+    @Cordova()
+    processVoidTransaction(originalSaleTransactionID: string): Promise<TransactionResponse>{
+        return;
+    }
 }

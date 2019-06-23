@@ -70,6 +70,7 @@
 - (void)processCashTransaction:(CDVInvokedUrlCommand *)command;                     // try/catch
 - (void)processCreditSaleTransactionWithCardReader:(CDVInvokedUrlCommand *)command; // try/catch
 - (void)processDebitSaleTransactionWithCardReader:(CDVInvokedUrlCommand *)command;  // try/catch
+- (void)processVoidTransaction:(CDVInvokedUrlCommand *)command;  // try/catch
 // Helpers
 - (bool)doCanExecute:(NSString *)theCallbackID requiresLogin:(bool)loginRequired;
 - (void)doSetSupportedDevices;

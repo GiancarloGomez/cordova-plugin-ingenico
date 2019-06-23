@@ -824,6 +824,40 @@ static long searchDuration       = 5000;
     }
 }
 
+- (void)processVoidTransaction:(CDVInvokedUrlCommand*)command
+{
+    #ifdef DEBUG_MODE
+        NSLog(@"processVoidTransaction()");
+    #endif
+    if ([self doCanExecute:command.callbackId requiresLogin:true])
+    {
+        @try
+        {
+            NSString *originalSaleTransactionID = [command.arguments objectAtIndex:0];
+
+            IMSVoidTransactionRequest *voidRequest = [[IMSVoidTransactionRequest alloc] initWithOriginalSaleTransactionID:originalSaleTransactionID
+                                                                                            andClerkID:nil
+                                                                                            andLongitude:nil
+                                                                                            andLatitude:nil ];
+            [[Ingenico sharedInstance].Payment processVoidTransaction:voidRequest
+                                                                        andOnDone:^(IMSTransactionResponse *response,NSError *error)
+            {
+                if(!error){
+                    NSString *JSONResponse = [response JSONString];
+                    [self sendPluginResult:command.callbackId messageAsString:JSONResponse];
+                }
+                else{
+                    [self sendPluginError:command.callbackId messageAsNSInteger:error.code];
+                }
+            }];
+        }
+        @catch ( NSException *e )
+        {
+            [self sendPluginError:command.callbackId messageAsString:e.reason];
+        }
+    }
+}
+
 #pragma mark - Helpers
 
 - (bool)doCanExecute:(NSString *)theCallbackID requiresLogin:(bool)loginRequired
